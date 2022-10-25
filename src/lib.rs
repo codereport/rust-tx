@@ -33,6 +33,7 @@ pub trait TensorOps {
 pub trait TensorIntOps {
     fn iota(self) -> TensorResult<i32>;
     fn sum(self, rank: Rank) -> TensorResult<i32>;
+    fn maximum(self, rank: Rank) -> TensorResult<i32>;
 }
 
 impl<T> TensorFns for Tensor<T> {
@@ -123,9 +124,56 @@ impl TensorIntOps for TensorResult<i32> {
                     shape: vec![],
                     data: vec![t.data.into_iter().sum()],
                 }),
+                Some(1) => {
+                    // TODO: online works for matrices
+                    let new_shape: Vec<i32> = t.shape.clone().into_iter().skip(1).collect();
+                    let chunk_size = t.shape.into_iter().nth(1).unwrap() as usize;
+                    Ok(Tensor {
+                        shape: new_shape,
+                        data: t
+                            .data
+                            .chunks(chunk_size)
+                            .fold(vec![0; chunk_size], |acc, chunk| {
+                                acc.iter().zip(chunk.iter()).map(|(a, b)| a + b).collect()
+                            }),
+                    })
+                }
+                Some(2) => {
+                    // TODO: online works for matrices
+                    let new_shape: Vec<i32> = t.shape.clone().into_iter().take(1).collect();
+                    let chunk_size = t.shape.into_iter().nth(1).unwrap() as usize;
+                    Ok(Tensor {
+                        shape: new_shape,
+                        data: t
+                            .data
+                            .chunks(chunk_size)
+                            .map(|chunk| chunk.into_iter().sum())
+                            .collect(),
+                    })
+                }
                 Some(_) => Err(TensorError::NotImplementedYet),
             },
         }
+    }
+
+    fn maximum(self, rank: Rank) -> TensorResult<i32> {
+        match self {
+            Err(e) => Err(e),
+            Ok(t) => match rank {
+                None => Ok(Tensor {
+                    shape: vec![],
+                    data: vec![t.data.into_iter().max().unwrap()],
+                }),
+                Some(_) => Err(TensorError::NotImplementedYet),
+            },
+        }
+    }
+}
+
+pub fn build_scalar(data: i32) -> Tensor<i32> {
+    Tensor {
+        shape: vec![],
+        data: vec![data],
     }
 }
 
@@ -136,11 +184,8 @@ pub fn build_vector<T>(data: Vec<T>) -> Tensor<T> {
     }
 }
 
-pub fn build_scalar(data: i32) -> Tensor<i32> {
-    Tensor {
-        shape: vec![],
-        data: vec![data],
-    }
+pub fn build_matrix<T>(shape: Vec<i32>, data: Vec<T>) -> Tensor<T> {
+    Tensor { shape, data }
 }
 
 pub fn print_tensor(tr: TensorResult<i32>) {
@@ -169,12 +214,12 @@ pub fn count_negatives(nums: Tensor<i32>) -> TensorResult<i32> {
     Ok(nums).less_than(n).sum(None)
 }
 
-// pub fn count_negatives(Tensor matrix) {
-//     matrix.lt(0).sum()
+// pub fn count_negatives(nums: Tensor) {
+//     nums.lt(0).sum()
 // }
 
 pub fn max_wealth(accounts: Tensor<i32>) -> TensorResult<i32> {
-    Ok(accounts)
+    Ok(accounts).sum(Some(2)).maximum(None)
 }
 
 // pub fn max_wealth(Tensor accounts) {
@@ -208,18 +253,15 @@ mod tests {
     #[test]
     fn test_count_negatives() {
         {
-            let input = Ok(build_vector(vec![-1, -2, 3, 4]))
-                .reshape(vec![2, 2])
-                .unwrap();
+            let input = build_matrix(vec![2, 2], vec![-1, -2, 3, 4]);
             let expected = Ok(build_scalar(2));
             assert_eq!(count_negatives(input), expected);
         }
         {
-            let input = Ok(build_vector(vec![
-                4, 3, 2, -1, 3, 2, 1, -1, 1, 1, -1, -2, -1, -1, -2, -3,
-            ]))
-            .reshape(vec![4, 4])
-            .unwrap();
+            let input = build_matrix(
+                vec![4, 4],
+                vec![4, 3, 2, -1, 3, 2, 1, -1, 1, 1, -1, -2, -1, -1, -2, -3],
+            );
             let expected = Ok(build_scalar(8));
             assert_eq!(count_negatives(input), expected);
         }
@@ -228,23 +270,17 @@ mod tests {
     #[test]
     fn test_max_wealth() {
         {
-            let input = Ok(build_vector(vec![1, 2, 3, 3, 2, 1]))
-                .reshape(vec![3, 2])
-                .unwrap();
+            let input = build_matrix(vec![2, 3], vec![1, 2, 3, 3, 2, 1]);
             let expected = Ok(build_scalar(6));
             assert_eq!(max_wealth(input), expected);
         }
         {
-            let input = Ok(build_vector(vec![1, 5, 7, 3, 3, 5]))
-                .reshape(vec![2, 3])
-                .unwrap();
+            let input = build_matrix(vec![3, 2], vec![1, 5, 7, 3, 3, 5]);
             let expected = Ok(build_scalar(10));
             assert_eq!(max_wealth(input), expected);
         }
         {
-            let input = Ok(build_vector(vec![2, 8, 7, 7, 1, 3, 1, 9, 5]))
-                .reshape(vec![2, 3])
-                .unwrap();
+            let input = build_matrix(vec![3, 3], vec![2, 8, 7, 7, 1, 3, 1, 9, 5]);
             let expected = Ok(build_scalar(17));
             assert_eq!(max_wealth(input), expected);
         }
