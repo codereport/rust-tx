@@ -80,7 +80,7 @@ impl<T: std::cmp::PartialOrd<T>> TensorOps for TensorResult<T> {
             Ok(t) => {
                 let n: i32 = shape.clone().iter().product();
                 Ok(Tensor {
-                    shape: shape,
+                    shape,
                     data: t.data.into_iter().take(n as usize).collect(),
                 })
             }
@@ -132,7 +132,7 @@ impl TensorIntOps for TensorResult<i32> {
 pub fn build_vector<T>(data: Vec<T>) -> Tensor<T> {
     Tensor {
         shape: vec![data.len() as i32],
-        data: data,
+        data,
     }
 }
 
