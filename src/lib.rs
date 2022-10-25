@@ -1,18 +1,15 @@
-
 use std::convert::TryInto;
 
-#[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum TensorError {
     Rank,
     Type,
-    NotImplementedYet
+    NotImplementedYet,
 }
 
 type Rank = Option<i32>;
 
-#[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Tensor<T> {
     shape: Vec<i32>,
     data: Vec<T>,
@@ -27,14 +24,14 @@ pub trait TensorFns {
 pub trait TensorOps {
     type Item;
 
-    fn first(self)                                      -> TensorResult<Self::Item>;
+    fn first(self) -> TensorResult<Self::Item>;
     fn less_than(self, other: TensorResult<Self::Item>) -> TensorResult<i32>;
-    fn reshape(self, shape: Vec<i32>)                   -> TensorResult<Self::Item>;
-    fn reverse(self, rank: Rank)                        -> TensorResult<Self::Item>;
+    fn reshape(self, shape: Vec<i32>) -> TensorResult<Self::Item>;
+    fn reverse(self, rank: Rank) -> TensorResult<Self::Item>;
 }
 
 pub trait TensorIntOps {
-    fn iota(self)            -> TensorResult<i32>;
+    fn iota(self) -> TensorResult<i32>;
     fn sum(self, rank: Rank) -> TensorResult<i32>;
 }
 
@@ -51,8 +48,8 @@ impl<T: std::cmp::PartialOrd<T>> TensorOps for TensorResult<T> {
         match self {
             Err(e) => Err(e),
             Ok(t) => Ok(Tensor {
-                shape: vec![], 
-                data: t.data.into_iter().take(1).collect()
+                shape: vec![],
+                data: t.data.into_iter().take(1).collect(),
             }),
         }
     }
@@ -60,55 +57,51 @@ impl<T: std::cmp::PartialOrd<T>> TensorOps for TensorResult<T> {
     fn less_than(self, other: TensorResult<T>) -> TensorResult<i32> {
         match self {
             Err(e) => Err(e),
-            Ok(t) => {
-                match other {
-                    Err(e) => Err(e),
-                    Ok(o) => { 
-                        let n = o.data.into_iter().next().unwrap();
-                        Ok(Tensor {
-                            shape: t.shape, 
-                            data: t.data.into_iter()
-                                   .map(|x| if x < n { 1 } else { 0 })
-                                   .collect()
-                        })
-
-                    }
+            Ok(t) => match other {
+                Err(e) => Err(e),
+                Ok(o) => {
+                    let n = o.data.into_iter().next().unwrap();
+                    Ok(Tensor {
+                        shape: t.shape,
+                        data: t
+                            .data
+                            .into_iter()
+                            .map(|x| if x < n { 1 } else { 0 })
+                            .collect(),
+                    })
                 }
-            }
+            },
         }
     }
 
     fn reshape(self, shape: Vec<i32>) -> TensorResult<T> {
         match self {
             Err(e) => Err(e),
-            Ok(t) => { 
+            Ok(t) => {
                 let n: i32 = shape.clone().iter().product();
                 Ok(Tensor {
                     shape: shape,
-                    data: t.data.into_iter().take(n as usize).collect()
+                    data: t.data.into_iter().take(n as usize).collect(),
                 })
-            },
+            }
         }
     }
 
     fn reverse(self, rank: Rank) -> TensorResult<T> {
         match self {
             Err(e) => Err(e),
-            Ok(t) => {
-                match rank {
-                    Some(_) => Err(TensorError::NotImplementedYet),
-                    None    => Ok(Tensor {
-                        shape: t.shape,
-                        data: t.data.into_iter().rev().collect()
-                    }),
-                }
-            }
+            Ok(t) => match rank {
+                Some(_) => Err(TensorError::NotImplementedYet),
+                None => Ok(Tensor {
+                    shape: t.shape,
+                    data: t.data.into_iter().rev().collect(),
+                }),
+            },
         }
     }
 }
 
-impl TensorIntOps for TensorResult<i32> 
-{
+impl TensorIntOps for TensorResult<i32> {
     fn iota(self) -> TensorResult<i32> {
         match self {
             Err(e) => Err(e),
@@ -124,56 +117,49 @@ impl TensorIntOps for TensorResult<i32>
 
     fn sum(self, rank: Rank) -> TensorResult<i32> {
         match self {
-            Err(e) => Err(e), 
-            Ok(t) => {
-                match rank {
-                    None => Ok(Tensor{
-                        shape: vec![],
-                        data: vec![t.data.into_iter().sum()]
-                    }),
-                    Some(_) => Err(TensorError::NotImplementedYet)
-                }
-            }
+            Err(e) => Err(e),
+            Ok(t) => match rank {
+                None => Ok(Tensor {
+                    shape: vec![],
+                    data: vec![t.data.into_iter().sum()],
+                }),
+                Some(_) => Err(TensorError::NotImplementedYet),
+            },
         }
     }
-
 }
-
 
 pub fn build_vector<T>(data: Vec<T>) -> Tensor<T> {
     Tensor {
         shape: vec![data.len() as i32],
-        data: data, 
+        data: data,
     }
 }
 
 pub fn build_scalar(data: i32) -> Tensor<i32> {
     Tensor {
         shape: vec![],
-        data: vec![data], 
+        data: vec![data],
     }
 }
-
-
 
 pub fn print_tensor(tr: TensorResult<i32>) {
     match tr {
         Err(e) => println!("{:?}", e),
         Ok(t) => {
-
-    if t.rank() == 0 {
-        println!("Scalar\n{:?}", t.data);
-    } else if t.rank() == 1 {
-        println!("Vector\n{:?}", t.data);
-    } else if t.rank() == 2 {
-        println!("Matrix");
-        let n: usize = (*t.shape.iter().next().unwrap()).try_into().unwrap();
-        for chunk in t.data.chunks(n) {
-            println!("{:?}", chunk);
-        }
-    } else {
-        println!("Not implemented yet");
-    }
+            if t.rank() == 0 {
+                println!("Scalar\n{:?}", t.data);
+            } else if t.rank() == 1 {
+                println!("Vector\n{:?}", t.data);
+            } else if t.rank() == 2 {
+                println!("Matrix");
+                let n: usize = (*t.shape.iter().next().unwrap()).try_into().unwrap();
+                for chunk in t.data.chunks(n) {
+                    println!("{:?}", chunk);
+                }
+            } else {
+                println!("Not implemented yet");
+            }
         }
     }
 }
@@ -192,7 +178,6 @@ pub fn count_negatives(nums: Tensor<i32>) -> TensorResult<i32> {
 //         .s(rev, id)
 //         .equal(grid.min(1))
 // }
-
 
 // pub fn max_wealth(Tensor accounts) {
 //     // what to call max reduce? probably maximum
@@ -222,5 +207,4 @@ mod tests {
         let expected = Ok(build_scalar(2));
         assert_eq!(count_negatives(input), expected);
     }
-
 }
