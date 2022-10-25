@@ -203,8 +203,21 @@ mod tests {
 
     #[test]
     fn test_count_negatives() {
-        let input = build_vector(vec![-1, -2, 3, 4]);
-        let expected = Ok(build_scalar(2));
-        assert_eq!(count_negatives(input), expected);
+        {
+            let input = Ok(build_vector(vec![-1, -2, 3, 4]))
+                .reshape(vec![2, 2])
+                .unwrap();
+            let expected = Ok(build_scalar(2));
+            assert_eq!(count_negatives(input), expected);
+        }
+        {
+            let input = Ok(build_vector(vec![
+                4, 3, 2, -1, 3, 2, 1, -1, 1, 1, -1, -2, -1, -1, -2, -3,
+            ]))
+            .reshape(vec![4, 4])
+            .unwrap();
+            let expected = Ok(build_scalar(8));
+            assert_eq!(count_negatives(input), expected);
+        }
     }
 }
