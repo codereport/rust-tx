@@ -166,22 +166,26 @@ pub fn print_tensor(tr: TensorResult<i32>) {
 
 pub fn count_negatives(nums: Tensor<i32>) -> TensorResult<i32> {
     let n = Ok(build_scalar(0));
-    return Ok(nums).less_than(n).sum(None);
+    Ok(nums).less_than(n).sum(None)
 }
 
 // pub fn count_negatives(Tensor matrix) {
 //     matrix.lt(0).sum()
 // }
 
-// pub fn check_matrix(Tensor grid) {
-//     grid.eye()
-//         .s(rev, id)
-//         .equal(grid.min(1))
-// }
+pub fn max_wealth(accounts: Tensor<i32>) -> TensorResult<i32> {
+    Ok(accounts)
+}
 
 // pub fn max_wealth(Tensor accounts) {
 //     // what to call max reduce? probably maximum
 //     accounts.sum(1).maximum()
+// }
+
+// pub fn check_matrix(Tensor grid) {
+//     grid.eye()
+//         .s(rev, id)
+//         .equal(grid.min(1))
 // }
 
 // pub fn mco(Tensor vector) {
@@ -218,6 +222,31 @@ mod tests {
             .unwrap();
             let expected = Ok(build_scalar(8));
             assert_eq!(count_negatives(input), expected);
+        }
+    }
+
+    #[test]
+    fn test_max_wealth() {
+        {
+            let input = Ok(build_vector(vec![1, 2, 3, 3, 2, 1]))
+                .reshape(vec![3, 2])
+                .unwrap();
+            let expected = Ok(build_scalar(6));
+            assert_eq!(max_wealth(input), expected);
+        }
+        {
+            let input = Ok(build_vector(vec![1, 5, 7, 3, 3, 5]))
+                .reshape(vec![2, 3])
+                .unwrap();
+            let expected = Ok(build_scalar(10));
+            assert_eq!(max_wealth(input), expected);
+        }
+        {
+            let input = Ok(build_vector(vec![2, 8, 7, 7, 1, 3, 1, 9, 5]))
+                .reshape(vec![2, 3])
+                .unwrap();
+            let expected = Ok(build_scalar(17));
+            assert_eq!(max_wealth(input), expected);
         }
     }
 }
