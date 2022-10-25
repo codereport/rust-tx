@@ -125,7 +125,7 @@ impl TensorIntOps for TensorResult<i32> {
                     data: vec![t.data.into_iter().sum()],
                 }),
                 Some(1) => {
-                    // TODO: online works for matrices
+                    // TODO: only works for matrices
                     let new_shape: Vec<i32> = t.shape.clone().into_iter().skip(1).collect();
                     let chunk_size = t.shape.into_iter().nth(1).unwrap() as usize;
                     Ok(Tensor {
@@ -139,7 +139,7 @@ impl TensorIntOps for TensorResult<i32> {
                     })
                 }
                 Some(2) => {
-                    // TODO: online works for matrices
+                    // TODO: only works for matrices
                     let new_shape: Vec<i32> = t.shape.clone().into_iter().take(1).collect();
                     let chunk_size = t.shape.into_iter().nth(1).unwrap() as usize;
                     Ok(Tensor {
@@ -222,7 +222,7 @@ pub fn max_wealth(accounts: Tensor<i32>) -> TensorResult<i32> {
     Ok(accounts).sum(Some(2)).maximum(None)
 }
 
-// pub fn max_wealth(Tensor accounts) {
+// pub fn max_wealth(accounts: Tensor) {
 //     // what to call max reduce? probably maximum
 //     accounts.sum(1).maximum()
 // }
