@@ -32,11 +32,16 @@ pub trait TensorOps {
 }
 
 pub trait TensorIntOps {
+    // Unary Functions
     fn iota(self) -> TensorResult<i32>;
+    // Unary Scalar Functions
+    fn sign(self) -> TensorResult<i32>;
+    // HOFs
+    fn reduce(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32>;
+    fn scan(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32>;
+    // Reduce Specializations
     fn maximum(self, rank: Rank) -> TensorResult<i32>;
     fn product(self, rank: Rank) -> TensorResult<i32>;
-    fn reduce(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32>;
-    fn sign(self) -> TensorResult<i32>;
     fn sum(self, rank: Rank) -> TensorResult<i32>;
 }
 
@@ -168,6 +173,28 @@ impl TensorIntOps for TensorResult<i32> {
         }
     }
 
+    fn scan(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32> {
+        match self {
+            Err(e) => Err(e),
+            Ok(t) => match rank {
+                None => {
+                    let first = t.data.iter().copied().next().unwrap();
+                    Ok(Tensor {
+                        shape: t.shape,
+                        data: Some(first)
+                            .into_iter()
+                            .chain(t.data.into_iter().skip(1).scan(first, |acc, x| {
+                                *acc = binop(*acc, x);
+                                Some(*acc)
+                            }))
+                            .collect(),
+                    })
+                }
+                Some(_) => Err(TensorError::NotImplementedYet),
+            },
+        }
+    }
+
     fn sign(self) -> TensorResult<i32> {
         match self {
             Err(e) => Err(e),
@@ -253,15 +280,20 @@ pub fn array_sign(arr: Tensor<i32>) -> TensorResult<i32> {
 //     arr.sign().product()
 // }
 
-// pub fn check_matrix(Tensor grid) {
-//     grid.eye()
-//         .s(rev, id)
-//         .equal(grid.min(1))
-// }
+pub fn mco(vec: Tensor<i32>) -> TensorResult<i32> {
+    let op = |a, b| b * (a + b);
+    Ok(vec).scan(&op, None).maximum(None)
+}
 
 // pub fn mco(Tensor vector) {
 //     vector.scan(phi1(left, mul, plus))
 //           .maximum()
+// }
+
+// pub fn check_matrix(Tensor grid) {
+//     grid.eye()
+//         .s(rev, id)
+//         .equal(grid.min(1))
 // }
 
 // pub fn max_paren_depth(str equation) {
@@ -382,6 +414,20 @@ mod tests {
             let input = build_vector(vec![-1, 1, -1, 1, -1]);
             let expected = Ok(build_scalar(-1));
             assert_eq!(array_sign(input), expected);
+        }
+    }
+
+    #[test]
+    fn test_mco() {
+        {
+            let input = build_vector(vec![1, 1, 0, 1, 1, 1]);
+            let expected = Ok(build_scalar(3));
+            assert_eq!(mco(input), expected);
+        }
+        {
+            let input = build_vector(vec![1, 0, 1, 1, 0, 1]);
+            let expected = Ok(build_scalar(2));
+            assert_eq!(mco(input), expected);
         }
     }
 }
