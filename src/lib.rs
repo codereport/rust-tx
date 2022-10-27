@@ -65,13 +65,13 @@ impl<T: std::cmp::PartialOrd<T>> TensorOps for TensorResult<T> {
             Ok(t) => match other {
                 Err(e) => Err(e),
                 Ok(o) => {
-                    let n = o.data.into_iter().next().unwrap();
+                    let n = &o.data[0];
                     Ok(Tensor {
                         shape: t.shape,
                         data: t
                             .data
                             .into_iter()
-                            .map(|x| if x < n { 1 } else { 0 })
+                            .map(|x| if x < *n { 1 } else { 0 })
                             .collect(),
                     })
                 }
@@ -114,7 +114,7 @@ impl TensorIntOps for TensorResult<i32> {
                 if t.rank() > 1 {
                     return Err(TensorError::Rank);
                 }
-                let n: i32 = t.data.into_iter().next().unwrap() + 1;
+                let n: i32 = &t.data[0] + 1;
                 Ok(build_vector((1..n).collect()))
             }
         }
@@ -217,7 +217,7 @@ pub fn print_tensor(tr: TensorResult<i32>) {
                 println!("Vector\n{:?}", t.data);
             } else if t.rank() == 2 {
                 println!("Matrix");
-                let n: usize = (*t.shape.iter().next().unwrap()).try_into().unwrap();
+                let n: usize = (*&t.shape[0]).try_into().unwrap();
                 for chunk in t.data.chunks(n) {
                     println!("{:?}", chunk);
                 }
