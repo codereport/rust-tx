@@ -274,7 +274,10 @@ mod tests {
     #[test]
     fn test_matrix_iota() {
         let iota_matrix = Ok(build_scalar(12)).iota().reshape(vec![3, 4]);
-        let expected = Ok(build_matrix(vec![3, 4], vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]));
+        let expected = Ok(build_matrix(
+            vec![3, 4],
+            vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+        ));
         assert_eq!(iota_matrix, expected);
     }
 
