@@ -223,7 +223,6 @@ pub fn max_wealth(accounts: Tensor<i32>) -> TensorResult<i32> {
 }
 
 // pub fn max_wealth(accounts: Tensor) {
-//     // what to call max reduce? probably maximum
 //     accounts.sum(1).maximum()
 // }
 
