@@ -253,22 +253,44 @@ mod tests {
     #[test]
     fn test_matrix_sums() {
         {
-            // sum all values
+            // matrix sum
             let input = Ok(build_scalar(9)).iota().reshape(vec![3, 3]);
             let expected = Ok(build_scalar(45));
             assert_eq!(input.sum(None), expected);
         }
         {
-            // sum columns
+            // column sums
             let input = Ok(build_scalar(9)).iota().reshape(vec![3, 3]);
             let expected = Ok(build_vector(vec![12, 15, 18]));
             assert_eq!(input.sum(Some(1)), expected);
         }
         {
-            // sum rows
+            // row sums
             let input = Ok(build_scalar(9)).iota().reshape(vec![3, 3]);
             let expected = Ok(build_vector(vec![6, 15, 24]));
             assert_eq!(input.sum(Some(2)), expected);
+        }
+    }
+
+    #[test]
+    fn test_matrix_maximums() {
+        {
+            // matrix maximum
+            let input = Ok(build_scalar(9)).iota().reshape(vec![3, 3]);
+            let expected = Ok(build_scalar(9));
+            assert_eq!(input.maximum(None), expected);
+        }
+        {
+            // column maximums
+            let input = Ok(build_scalar(9)).iota().reshape(vec![3, 3]);
+            let expected = Ok(build_vector(vec![7, 8, 9]));
+            assert_eq!(input.maximum(Some(1)), expected);
+        }
+        {
+            // row maximums
+            let input = Ok(build_scalar(9)).iota().reshape(vec![3, 3]);
+            let expected = Ok(build_vector(vec![3, 6, 9]));
+            assert_eq!(input.maximum(Some(2)), expected);
         }
     }
 
