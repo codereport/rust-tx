@@ -1,3 +1,4 @@
+use num;
 use std::convert::TryInto;
 
 #[derive(Debug, PartialEq)]
@@ -33,7 +34,9 @@ pub trait TensorOps {
 pub trait TensorIntOps {
     fn iota(self) -> TensorResult<i32>;
     fn maximum(self, rank: Rank) -> TensorResult<i32>;
+    fn product(self, rank: Rank) -> TensorResult<i32>;
     fn reduce(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32>;
+    fn sign(self) -> TensorResult<i32>;
     fn sum(self, rank: Rank) -> TensorResult<i32>;
 }
 
@@ -117,6 +120,11 @@ impl TensorIntOps for TensorResult<i32> {
         }
     }
 
+    fn product(self, rank: Rank) -> TensorResult<i32> {
+        let mul = |a, b| a * b;
+        self.reduce(&mul, rank)
+    }
+
     fn reduce(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32> {
         match self {
             Err(e) => Err(e),
@@ -157,6 +165,16 @@ impl TensorIntOps for TensorResult<i32> {
                 }
                 Some(_) => Err(TensorError::NotImplementedYet),
             },
+        }
+    }
+
+    fn sign(self) -> TensorResult<i32> {
+        match self {
+            Err(e) => Err(e),
+            Ok(t) => Ok(Tensor {
+                shape: t.shape,
+                data: t.data.into_iter().map(num::signum).collect(),
+            }),
         }
     }
 
@@ -225,6 +243,14 @@ pub fn max_wealth(accounts: Tensor<i32>) -> TensorResult<i32> {
 
 // pub fn max_wealth(accounts: Tensor) {
 //     accounts.sum(1).maximum()
+// }
+
+pub fn array_sign(arr: Tensor<i32>) -> TensorResult<i32> {
+    Ok(arr).sign().product(None)
+}
+
+// pub fn array_sign(arr: Tensor<i32>) {
+//     arr.sign().product()
 // }
 
 // pub fn check_matrix(Tensor grid) {
@@ -337,6 +363,25 @@ mod tests {
             let input = build_matrix(vec![3, 3], vec![2, 8, 7, 7, 1, 3, 1, 9, 5]);
             let expected = Ok(build_scalar(17));
             assert_eq!(max_wealth(input), expected);
+        }
+    }
+
+    #[test]
+    fn test_array_sign() {
+        {
+            let input = build_vector(vec![-1, -2, -3, -4, 3, 2, 1]);
+            let expected = Ok(build_scalar(1));
+            assert_eq!(array_sign(input), expected);
+        }
+        {
+            let input = build_vector(vec![1, 5, 0, 2, -3]);
+            let expected = Ok(build_scalar(0));
+            assert_eq!(array_sign(input), expected);
+        }
+        {
+            let input = build_vector(vec![-1, 1, -1, 1, -1]);
+            let expected = Ok(build_scalar(-1));
+            assert_eq!(array_sign(input), expected);
         }
     }
 }
