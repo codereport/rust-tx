@@ -251,6 +251,28 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_matrix_sums() {
+        {
+            // sum all values
+            let input = Ok(build_scalar(9)).iota().reshape(vec![3, 3]);
+            let expected = Ok(build_scalar(45));
+            assert_eq!(input.sum(None), expected);
+        }
+        {
+            // sum columns
+            let input = Ok(build_scalar(9)).iota().reshape(vec![3, 3]);
+            let expected = Ok(build_vector(vec![12, 15, 18]));
+            assert_eq!(input.sum(Some(1)), expected);
+        }
+        {
+            // sum rows
+            let input = Ok(build_scalar(9)).iota().reshape(vec![3, 3]);
+            let expected = Ok(build_vector(vec![6, 15, 24]));
+            assert_eq!(input.sum(Some(2)), expected);
+        }
+    }
+
+    #[test]
     fn test_count_negatives() {
         {
             let input = build_matrix(vec![2, 2], vec![-1, -2, 3, 4]);
