@@ -166,16 +166,8 @@ impl TensorIntOps for TensorResult<i32> {
     }
 
     fn maximum(self, rank: Rank) -> TensorResult<i32> {
-        match self {
-            Err(e) => Err(e),
-            Ok(t) => match rank {
-                None => Ok(Tensor {
-                    shape: vec![],
-                    data: vec![t.data.into_iter().max().unwrap()],
-                }),
-                Some(_) => Err(TensorError::NotImplementedYet),
-            },
-        }
+        let max = |a, b| std::cmp::max(a, b);
+        self.reduce(&max, rank)
     }
 }
 
