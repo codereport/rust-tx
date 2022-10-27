@@ -32,8 +32,9 @@ pub trait TensorOps {
 
 pub trait TensorIntOps {
     fn iota(self) -> TensorResult<i32>;
-    fn sum(self, rank: Rank) -> TensorResult<i32>;
     fn maximum(self, rank: Rank) -> TensorResult<i32>;
+    fn reduce(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32>;
+    fn sum(self, rank: Rank) -> TensorResult<i32>;
 }
 
 impl<T> TensorFns for Tensor<T> {
@@ -116,13 +117,13 @@ impl TensorIntOps for TensorResult<i32> {
         }
     }
 
-    fn sum(self, rank: Rank) -> TensorResult<i32> {
+    fn reduce(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32> {
         match self {
             Err(e) => Err(e),
             Ok(t) => match rank {
                 None => Ok(Tensor {
                     shape: vec![],
-                    data: vec![t.data.into_iter().sum()],
+                    data: vec![t.data.into_iter().reduce(binop).unwrap()],
                 }),
                 Some(1) => {
                     // TODO: only works for matrices
@@ -134,7 +135,10 @@ impl TensorIntOps for TensorResult<i32> {
                             .data
                             .chunks(chunk_size)
                             .fold(vec![0; chunk_size], |acc, chunk| {
-                                acc.iter().zip(chunk.iter()).map(|(a, b)| a + b).collect()
+                                acc.iter()
+                                    .zip(chunk.iter())
+                                    .map(|(a, b)| binop(*a, *b))
+                                    .collect()
                             }),
                     })
                 }
@@ -147,13 +151,18 @@ impl TensorIntOps for TensorResult<i32> {
                         data: t
                             .data
                             .chunks(chunk_size)
-                            .map(|chunk| chunk.into_iter().sum())
+                            .map(|chunk| chunk.iter().copied().reduce(binop).unwrap())
                             .collect(),
                     })
                 }
                 Some(_) => Err(TensorError::NotImplementedYet),
             },
         }
+    }
+
+    fn sum(self, rank: Rank) -> TensorResult<i32> {
+        let plus = |a, b| a + b;
+        self.reduce(&plus, rank)
     }
 
     fn maximum(self, rank: Rank) -> TensorResult<i32> {
