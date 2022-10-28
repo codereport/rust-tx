@@ -37,6 +37,11 @@ pub trait TensorIntOps {
     // Unary Scalar Functions
     fn sign(self) -> TensorResult<i32>;
     // HOFs
+    fn outer_product(
+        self,
+        other: TensorResult<i32>,
+        binop: &dyn Fn(i32, i32) -> i32,
+    ) -> TensorResult<i32>;
     fn reduce(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32>;
     fn scan(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32>;
     // Reduce Specializations
@@ -128,6 +133,35 @@ impl TensorIntOps for TensorResult<i32> {
     fn product(self, rank: Rank) -> TensorResult<i32> {
         let mul = |a, b| a * b;
         self.reduce(&mul, rank)
+    }
+
+    fn outer_product(
+        self,
+        other: TensorResult<i32>,
+        binop: &dyn Fn(i32, i32) -> i32,
+    ) -> TensorResult<i32> {
+        match self {
+            Err(e) => Err(e),
+            Ok(t) => match other {
+                Err(e) => Err(e),
+                Ok(o) => {
+                    if t.rank() > 1 || o.rank() > 1 {
+                        return Err(TensorError::Rank);
+                    }
+                    let rows = &t.shape[0];
+                    let cols = &o.shape[0];
+                    let new_data = t
+                        .data
+                        .into_iter()
+                        .flat_map(|x| o.data.iter().map(move |y| binop(x, *y)))
+                        .collect::<Vec<_>>();
+                    Ok(Tensor {
+                        shape: vec![*rows, *cols],
+                        data: new_data,
+                    })
+                }
+            },
+        }
     }
 
     fn reduce(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32> {
@@ -429,5 +463,14 @@ mod tests {
             let expected = Ok(build_scalar(2));
             assert_eq!(mco(input), expected);
         }
+    }
+
+    #[test]
+    fn test_outer_product() {
+        let plus = |a, b| a + b;
+        let lhs = build_vector(vec![1, 2, 3]);
+        let rhs = build_vector(vec![1, 2, 3]);
+        let expected = Ok(build_matrix(vec![3, 3], vec![2, 3, 4, 3, 4, 5, 4, 5, 6]));
+        assert_eq!(Ok(lhs).outer_product(Ok(rhs), &plus), expected);
     }
 }
