@@ -61,74 +61,60 @@ impl<T: std::cmp::PartialOrd<T>> TensorOps for TensorResult<T> {
     type Item = T;
 
     fn first(self) -> TensorResult<T> {
-        match self {
-            Err(e) => Err(e),
-            Ok(t) => Ok(Tensor {
+        self.and_then(|t| {
+            Ok(Tensor {
                 shape: vec![],
                 data: t.data.into_iter().take(1).collect(),
-            }),
-        }
+            })
+        })
     }
 
     fn less_than(self, other: TensorResult<T>) -> TensorResult<i32> {
-        match self {
-            Err(e) => Err(e),
-            Ok(t) => match other {
-                Err(e) => Err(e),
-                Ok(o) => {
-                    let n = &o.data[0];
-                    Ok(Tensor {
-                        shape: t.shape,
-                        data: t
-                            .data
-                            .into_iter()
-                            .map(|x| if x < *n { 1 } else { 0 })
-                            .collect(),
-                    })
-                }
-            },
-        }
+        self.and_then(|t| {
+            other.and_then(|o| {
+                let n = &o.data[0];
+                Ok(Tensor {
+                    shape: t.shape,
+                    data: t
+                        .data
+                        .into_iter()
+                        .map(|x| if x < *n { 1 } else { 0 })
+                        .collect(),
+                })
+            })
+        })
     }
 
     fn reshape(self, shape: Vec<i32>) -> TensorResult<T> {
-        match self {
-            Err(e) => Err(e),
-            Ok(t) => {
-                let n: i32 = shape.clone().iter().product();
-                Ok(Tensor {
-                    shape,
-                    data: t.data.into_iter().take(n as usize).collect(),
-                })
-            }
-        }
+        self.and_then(|t| {
+            let n: i32 = shape.clone().iter().product();
+            Ok(Tensor {
+                shape,
+                data: t.data.into_iter().take(n as usize).collect(),
+            })
+        })
     }
 
     fn reverse(self, rank: Rank) -> TensorResult<T> {
-        match self {
-            Err(e) => Err(e),
-            Ok(t) => match rank {
-                Some(_) => Err(TensorError::NotImplementedYet),
-                None => Ok(Tensor {
-                    shape: t.shape,
-                    data: t.data.into_iter().rev().collect(),
-                }),
-            },
-        }
+        self.and_then(|t| match rank {
+            Some(_) => Err(TensorError::NotImplementedYet),
+            None => Ok(Tensor {
+                shape: t.shape,
+                data: t.data.into_iter().rev().collect(),
+            }),
+        })
     }
 }
 
 impl TensorIntOps for TensorResult<i32> {
     fn iota(self) -> TensorResult<i32> {
-        match self {
-            Err(e) => Err(e),
-            Ok(t) => {
-                if t.rank() > 1 {
-                    return Err(TensorError::Rank);
-                }
-                let n: i32 = &t.data[0] + 1;
-                Ok(build_vector((1..n).collect()))
+        self.and_then(|t| {
+            if t.rank() > 1 {
+                return Err(TensorError::Rank);
             }
-        }
+            let n: i32 = &t.data[0] + 1;
+            Ok(build_vector((1..n).collect()))
+        })
     }
 
     fn product(self, rank: Rank) -> TensorResult<i32> {
@@ -140,103 +126,92 @@ impl TensorIntOps for TensorResult<i32> {
         other: TensorResult<i32>,
         binop: &dyn Fn(i32, i32) -> i32,
     ) -> TensorResult<i32> {
-        match self {
-            Err(e) => Err(e),
-            Ok(t) => match other {
-                Err(e) => Err(e),
-                Ok(o) => {
-                    if t.rank() > 1 || o.rank() > 1 {
-                        return Err(TensorError::Rank);
-                    }
-                    let rows = &t.shape[0];
-                    let cols = &o.shape[0];
-                    let new_data = t
-                        .data
-                        .into_iter()
-                        .flat_map(|x| o.data.iter().map(move |y| binop(x, *y)))
-                        .collect::<Vec<_>>();
-                    Ok(Tensor {
-                        shape: vec![*rows, *cols],
-                        data: new_data,
-                    })
+        self.and_then(|t| {
+            other.and_then(|o| {
+                if t.rank() > 1 || o.rank() > 1 {
+                    return Err(TensorError::Rank);
                 }
-            },
-        }
+                let rows = &t.shape[0];
+                let cols = &o.shape[0];
+                let new_data = t
+                    .data
+                    .into_iter()
+                    .flat_map(|x| o.data.iter().map(move |y| binop(x, *y)))
+                    .collect::<Vec<_>>();
+                Ok(Tensor {
+                    shape: vec![*rows, *cols],
+                    data: new_data,
+                })
+            })
+        })
     }
 
     fn reduce(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32> {
-        match self {
-            Err(e) => Err(e),
-            Ok(t) => match rank {
-                None => Ok(Tensor {
-                    shape: vec![],
-                    data: vec![t.data.into_iter().reduce(binop).unwrap()],
-                }),
-                Some(1) => {
-                    // TODO: only works for matrices
-                    let new_shape: Vec<i32> = t.shape.clone().into_iter().skip(1).collect();
-                    let chunk_size = t.shape.into_iter().nth(1).unwrap() as usize;
-                    Ok(Tensor {
-                        shape: new_shape,
-                        data: t
-                            .data
-                            .chunks(chunk_size)
-                            .fold(vec![0; chunk_size], |acc, chunk| {
-                                acc.iter()
-                                    .zip(chunk.iter())
-                                    .map(|(a, b)| binop(*a, *b))
-                                    .collect()
-                            }),
-                    })
-                }
-                Some(2) => {
-                    // TODO: only works for matrices
-                    let new_shape: Vec<i32> = t.shape.clone().into_iter().take(1).collect();
-                    let chunk_size = t.shape.into_iter().nth(1).unwrap() as usize;
-                    Ok(Tensor {
-                        shape: new_shape,
-                        data: t
-                            .data
-                            .chunks(chunk_size)
-                            .map(|chunk| chunk.iter().copied().reduce(binop).unwrap())
-                            .collect(),
-                    })
-                }
-                Some(_) => Err(TensorError::NotImplementedYet),
-            },
-        }
+        self.and_then(|t| match rank {
+            None => Ok(Tensor {
+                shape: vec![],
+                data: vec![t.data.into_iter().reduce(binop).unwrap()],
+            }),
+            Some(1) => {
+                // TODO: only works for matrices
+                let new_shape: Vec<i32> = t.shape.clone().into_iter().skip(1).collect();
+                let chunk_size = t.shape.into_iter().nth(1).unwrap() as usize;
+                Ok(Tensor {
+                    shape: new_shape,
+                    data: t
+                        .data
+                        .chunks(chunk_size)
+                        .fold(vec![0; chunk_size], |acc, chunk| {
+                            acc.iter()
+                                .zip(chunk.iter())
+                                .map(|(a, b)| binop(*a, *b))
+                                .collect()
+                        }),
+                })
+            }
+            Some(2) => {
+                // TODO: only works for matrices
+                let new_shape: Vec<i32> = t.shape.clone().into_iter().take(1).collect();
+                let chunk_size = t.shape.into_iter().nth(1).unwrap() as usize;
+                Ok(Tensor {
+                    shape: new_shape,
+                    data: t
+                        .data
+                        .chunks(chunk_size)
+                        .map(|chunk| chunk.iter().copied().reduce(binop).unwrap())
+                        .collect(),
+                })
+            }
+            Some(_) => Err(TensorError::NotImplementedYet),
+        })
     }
 
     fn scan(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32> {
-        match self {
-            Err(e) => Err(e),
-            Ok(t) => match rank {
-                None => {
-                    let first = t.data.iter().copied().next().unwrap();
-                    Ok(Tensor {
-                        shape: t.shape,
-                        data: Some(first)
-                            .into_iter()
-                            .chain(t.data.into_iter().skip(1).scan(first, |acc, x| {
-                                *acc = binop(*acc, x);
-                                Some(*acc)
-                            }))
-                            .collect(),
-                    })
-                }
-                Some(_) => Err(TensorError::NotImplementedYet),
-            },
-        }
+        self.and_then(|t| match rank {
+            None => {
+                let first = t.data.iter().copied().next().unwrap();
+                Ok(Tensor {
+                    shape: t.shape,
+                    data: Some(first)
+                        .into_iter()
+                        .chain(t.data.into_iter().skip(1).scan(first, |acc, x| {
+                            *acc = binop(*acc, x);
+                            Some(*acc)
+                        }))
+                        .collect(),
+                })
+            }
+            Some(_) => Err(TensorError::NotImplementedYet),
+        })
     }
 
     fn sign(self) -> TensorResult<i32> {
-        match self {
-            Err(e) => Err(e),
-            Ok(t) => Ok(Tensor {
+        self.and_then(|t| {
+            Ok(Tensor {
                 shape: t.shape,
                 data: t.data.into_iter().map(num::signum).collect(),
-            }),
-        }
+            })
+        })
     }
 
     fn sum(self, rank: Rank) -> TensorResult<i32> {
@@ -348,6 +323,15 @@ pub fn stringless_max_paren_depth(equation: Tensor<i32>) -> TensorResult<i32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_first() {
+        {
+            let input = Ok(build_vector(vec![1, 2, 3]));
+            let expected = Ok(build_scalar(1));
+            assert_eq!(input.first(), expected);
+        }
+    }
 
     #[test]
     fn test_matrix_sums() {
