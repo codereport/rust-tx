@@ -338,9 +338,8 @@ pub fn mco(vec: Tensor<i32>) -> TensorResult<i32> {
 
 pub fn stringless_max_paren_depth(equation: Tensor<i32>) -> TensorResult<i32> {
     let rhs = Ok(build_vector(vec![2, 3]));
-    let eq = |a, b| if a == b { 1 } else { 0 };
     Ok(equation)
-        .outer_product(rhs, &eq)
+        .outer_product(rhs, &|a, b| (a == b).into())
         .reduce(&Sub::sub, Some(2))
         .scan(&Add::add, None)
         .maximum(None)
