@@ -1,5 +1,6 @@
 use num;
 use std::convert::TryInto;
+use std::ops::{Add, Mul, Sub};
 
 #[derive(Debug, PartialEq)]
 pub enum TensorError {
@@ -131,8 +132,7 @@ impl TensorIntOps for TensorResult<i32> {
     }
 
     fn product(self, rank: Rank) -> TensorResult<i32> {
-        let mul = |a, b| a * b;
-        self.reduce(&mul, rank)
+        self.reduce(&Mul::mul, rank)
     }
 
     fn outer_product(
@@ -240,13 +240,11 @@ impl TensorIntOps for TensorResult<i32> {
     }
 
     fn sum(self, rank: Rank) -> TensorResult<i32> {
-        let plus = |a, b| a + b;
-        self.reduce(&plus, rank)
+        self.reduce(&Add::add, rank)
     }
 
     fn maximum(self, rank: Rank) -> TensorResult<i32> {
-        let max = |a, b| std::cmp::max(a, b);
-        self.reduce(&max, rank)
+        self.reduce(&std::cmp::max, rank)
     }
 }
 
@@ -341,12 +339,10 @@ pub fn mco(vec: Tensor<i32>) -> TensorResult<i32> {
 pub fn stringless_max_paren_depth(equation: Tensor<i32>) -> TensorResult<i32> {
     let rhs = Ok(build_vector(vec![2, 3]));
     let eq = |a, b| if a == b { 1 } else { 0 };
-    let minus = |a, b| a - b;
-    let plus = |a, b| a + b;
     Ok(equation)
         .outer_product(rhs, &eq)
-        .reduce(&minus, Some(2))
-        .scan(&plus, None)
+        .reduce(&Sub::sub, Some(2))
+        .scan(&Add::add, None)
         .maximum(None)
 }
 
@@ -479,11 +475,10 @@ mod tests {
 
     #[test]
     fn test_outer_product() {
-        let plus = |a, b| a + b;
         let lhs = build_vector(vec![1, 2, 3]);
         let rhs = build_vector(vec![1, 2, 3]);
         let expected = Ok(build_matrix(vec![3, 3], vec![2, 3, 4, 3, 4, 5, 4, 5, 6]));
-        assert_eq!(Ok(lhs).outer_product(Ok(rhs), &plus), expected);
+        assert_eq!(Ok(lhs).outer_product(Ok(rhs), &Add::add), expected);
     }
 
     #[test]
