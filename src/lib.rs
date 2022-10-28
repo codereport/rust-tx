@@ -338,6 +338,18 @@ pub fn mco(vec: Tensor<i32>) -> TensorResult<i32> {
 //             .maximum()
 // }
 
+pub fn stringless_max_paren_depth(equation: Tensor<i32>) -> TensorResult<i32> {
+    let rhs = Ok(build_vector(vec![2, 3]));
+    let eq = |a, b| if a == b { 1 } else { 0 };
+    let minus = |a, b| a - b;
+    let plus = |a, b| a + b;
+    Ok(equation)
+        .outer_product(rhs, &eq)
+        .reduce(&minus, Some(2))
+        .scan(&plus, None)
+        .maximum(None)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -472,5 +484,12 @@ mod tests {
         let rhs = build_vector(vec![1, 2, 3]);
         let expected = Ok(build_matrix(vec![3, 3], vec![2, 3, 4, 3, 4, 5, 4, 5, 6]));
         assert_eq!(Ok(lhs).outer_product(Ok(rhs), &plus), expected);
+    }
+
+    #[test]
+    fn test_stringless_max_paren_depth() {
+        let input = build_vector(vec![2, 2, 4, 5, 3, 2, 2, 3, 3, 8, 3, 3]);
+        let expected = Ok(build_scalar(3));
+        assert_eq!(stringless_max_paren_depth(input), expected);
     }
 }
