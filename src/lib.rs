@@ -75,7 +75,7 @@ impl<T: std::cmp::PartialOrd<T>> TensorOps for TensorResult<T> {
     fn less_than(self, other: TensorResult<T>) -> TensorResult<i32> {
         self.and_then(|t| {
             other.and_then(|o| {
-                let n = &o.data[0];
+                let n = o.data.first().unwrap();
                 Ok(Tensor {
                     shape: t.shape,
                     data: t
@@ -115,7 +115,7 @@ impl TensorIntOps for TensorResult<i32> {
             if t.rank() > 1 {
                 return Err(TensorError::Rank);
             }
-            let n: i32 = &t.data[0] + 1;
+            let n: i32 = t.data.first().unwrap() + 1;
             Ok(build_vector((1..n).collect()))
         })
     }
@@ -134,8 +134,8 @@ impl TensorIntOps for TensorResult<i32> {
                 if t.rank() > 1 || o.rank() > 1 {
                     return Err(TensorError::Rank);
                 }
-                let rows = &t.shape[0];
-                let cols = &o.shape[0];
+                let rows = t.shape.first().unwrap();
+                let cols = o.shape.first().unwrap();
                 let new_data = t
                     .data
                     .into_iter()
@@ -254,7 +254,7 @@ pub fn print_tensor(tr: TensorResult<i32>) {
                 println!("Vector\n{:?}", t.data);
             } else if t.rank() == 2 {
                 println!("Matrix");
-                let n: usize = (*&t.shape[0]).try_into().unwrap();
+                let n: usize = (*t.shape.first().unwrap()).try_into().unwrap();
                 for chunk in t.data.chunks(n) {
                     println!("{:?}", chunk);
                 }
