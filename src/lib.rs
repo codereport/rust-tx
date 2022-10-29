@@ -11,7 +11,7 @@ pub enum TensorError {
 
 type Rank = Option<i32>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Tensor<T> {
     shape: Vec<i32>,
     data: Vec<T>,
@@ -35,8 +35,10 @@ pub trait TensorOps {
 pub trait TensorIntOps {
     // Unary Functions
     fn iota(self) -> TensorResult<i32>;
+
     // Unary Scalar Functions
     fn sign(self) -> TensorResult<i32>;
+
     // HOFs
     fn outer_product(
         self,
@@ -45,6 +47,7 @@ pub trait TensorIntOps {
     ) -> TensorResult<i32>;
     fn reduce(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32>;
     fn scan(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32>;
+
     // Reduce Specializations
     fn maximum(self, rank: Rank) -> TensorResult<i32>;
     fn product(self, rank: Rank) -> TensorResult<i32>;
@@ -320,6 +323,12 @@ pub fn stringless_max_paren_depth(equation: Tensor<i32>) -> TensorResult<i32> {
         .maximum(None)
 }
 
+pub fn smaller_numbers_than_current(nums: Tensor<i32>) -> TensorResult<i32> {
+    Ok(nums.clone())
+        .outer_product(Ok(nums), &|a, b| (a > b).into())
+        .sum(Some(2))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -389,6 +398,7 @@ mod tests {
 
     #[test]
     fn test_count_negatives() {
+        // https://leetcode.com/problems/count-negative-numbers-in-a-sorted-matrix/
         {
             let input = build_matrix(vec![2, 2], vec![-1, -2, 3, 4]);
             let expected = Ok(build_scalar(2));
@@ -406,6 +416,7 @@ mod tests {
 
     #[test]
     fn test_max_wealth() {
+        // https://leetcode.com/problems/richest-customer-wealth/
         {
             let input = build_matrix(vec![2, 3], vec![1, 2, 3, 3, 2, 1]);
             let expected = Ok(build_scalar(6));
@@ -425,6 +436,7 @@ mod tests {
 
     #[test]
     fn test_array_sign() {
+        // https://leetcode.com/problems/sign-of-the-product-of-an-array/
         {
             let input = build_vector(vec![-1, -2, -3, -4, 3, 2, 1]);
             let expected = Ok(build_scalar(1));
@@ -444,6 +456,7 @@ mod tests {
 
     #[test]
     fn test_mco() {
+        // https://leetcode.com/problems/max-consecutive-ones/
         {
             let input = build_vector(vec![1, 1, 0, 1, 1, 1]);
             let expected = Ok(build_scalar(3));
@@ -470,4 +483,27 @@ mod tests {
         let expected = Ok(build_scalar(3));
         assert_eq!(stringless_max_paren_depth(input), expected);
     }
+
+    #[test]
+    fn test_smaller_numbers_than_current() {
+        // https://leetcode.com/problems/how-many-numbers-are-smaller-than-the-current-number/
+        {
+            let input = build_vector(vec![8, 1, 2, 2, 3]);
+            let expected = Ok(build_vector(vec![4, 0, 1, 1, 3]));
+            assert_eq!(smaller_numbers_than_current(input), expected);
+        }
+        {
+            let input = build_vector(vec![6, 5, 4, 8]);
+            let expected = Ok(build_vector(vec![2, 1, 0, 3]));
+            assert_eq!(smaller_numbers_than_current(input), expected);
+        }
+        {
+            let input = build_vector(vec![7, 7, 7, 7]);
+            let expected = Ok(build_vector(vec![0, 0, 0, 0]));
+            assert_eq!(smaller_numbers_than_current(input), expected);
+        }
+    }
+
+    // TODO:
+    // https://leetcode.com/problems/k-diff-pairs-in-an-array/
 }
