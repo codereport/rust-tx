@@ -5,6 +5,7 @@ use std::ops::{Add, Mul, Sub};
 #[derive(Debug, PartialEq)]
 pub enum TensorError {
     Rank,
+    Shape,
     Type,
     NotImplementedYet,
 }
@@ -26,9 +27,9 @@ pub trait TensorFns {
 pub trait TensorOps {
     type Item;
 
-    fn first(self) -> TensorResult<Self::Item>;
+    fn first(self) -> Tensor<Self::Item>;
     fn less_than(self, other: Tensor<Self::Item>) -> TensorResult<i32>;
-    fn reshape(self, shape: Vec<i32>) -> TensorResult<Self::Item>;
+    fn reshape(self, shape: Vec<i32>) -> Tensor<Self::Item>;
     fn reverse(self, rank: Rank) -> TensorResult<Self::Item>;
 }
 
@@ -63,27 +64,33 @@ impl<T> TensorFns for Tensor<T> {
 impl<T: std::cmp::PartialOrd<T>> TensorOps for Tensor<T> {
     type Item = T;
 
-    fn first(self) -> TensorResult<T> {
-        Ok(Tensor {
+    fn first(self) -> Tensor<T> {
+        Tensor {
             shape: vec![],
             data: self.data.into_iter().take(1).collect(),
-        })
+        }
     }
 
     fn less_than(self, other: Tensor<T>) -> TensorResult<i32> {
         let n = other.data.first().unwrap();
-        Ok(Tensor {
-            shape: self.shape,
-            data: self.data.into_iter().map(|x| (x < *n).into()).collect(),
-        })
+        if other.rank() == 0 {
+            return Ok(Tensor {
+                shape: self.shape,
+                data: self.data.into_iter().map(|x| (x < *n).into()).collect(),
+            });
+        }
+        if self.shape == other.shape {
+            return Err(TensorError::NotImplementedYet);
+        }
+        Err(TensorError::Shape)
     }
 
-    fn reshape(self, shape: Vec<i32>) -> TensorResult<T> {
+    fn reshape(self, shape: Vec<i32>) -> Tensor<T> {
         let n: i32 = shape.clone().iter().product();
-        Ok(Tensor {
+        Tensor {
             shape,
             data: self.data.into_iter().take(n as usize).collect(),
-        })
+        }
     }
 
     fn reverse(self, rank: Rank) -> TensorResult<T> {
@@ -326,7 +333,7 @@ mod tests {
         {
             let input = build_vector(vec![1, 2, 3]);
             let expected = build_scalar(1);
-            assert_eq!(input.first().unwrap(), expected);
+            assert_eq!(input.first(), expected);
         }
     }
 
