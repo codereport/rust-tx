@@ -27,7 +27,7 @@ pub trait TensorOps {
     type Item;
 
     fn first(self) -> TensorResult<Self::Item>;
-    fn less_than(self, other: TensorResult<Self::Item>) -> TensorResult<i32>;
+    fn less_than(self, other: Tensor<Self::Item>) -> TensorResult<i32>;
     fn reshape(self, shape: Vec<i32>) -> TensorResult<Self::Item>;
     fn reverse(self, rank: Rank) -> TensorResult<Self::Item>;
 }
@@ -42,7 +42,7 @@ pub trait TensorIntOps {
     // HOFs
     fn outer_product(
         self,
-        other: TensorResult<i32>,
+        other: Tensor<i32>,
         binop: &dyn Fn(i32, i32) -> i32,
     ) -> TensorResult<i32>;
     fn reduce(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32>;
@@ -60,64 +60,50 @@ impl<T> TensorFns for Tensor<T> {
     }
 }
 
-impl<T: std::cmp::PartialOrd<T>> TensorOps for TensorResult<T> {
+impl<T: std::cmp::PartialOrd<T>> TensorOps for Tensor<T> {
     type Item = T;
 
     fn first(self) -> TensorResult<T> {
-        self.and_then(|t| {
-            Ok(Tensor {
-                shape: vec![],
-                data: t.data.into_iter().take(1).collect(),
-            })
+        Ok(Tensor {
+            shape: vec![],
+            data: self.data.into_iter().take(1).collect(),
         })
     }
 
-    fn less_than(self, other: TensorResult<T>) -> TensorResult<i32> {
-        self.and_then(|t| {
-            other.and_then(|o| {
-                let n = o.data.first().unwrap();
-                Ok(Tensor {
-                    shape: t.shape,
-                    data: t
-                        .data
-                        .into_iter()
-                        .map(|x| if x < *n { 1 } else { 0 })
-                        .collect(),
-                })
-            })
+    fn less_than(self, other: Tensor<T>) -> TensorResult<i32> {
+        let n = other.data.first().unwrap();
+        Ok(Tensor {
+            shape: self.shape,
+            data: self.data.into_iter().map(|x| (x < *n).into()).collect(),
         })
     }
 
     fn reshape(self, shape: Vec<i32>) -> TensorResult<T> {
-        self.and_then(|t| {
-            let n: i32 = shape.clone().iter().product();
-            Ok(Tensor {
-                shape,
-                data: t.data.into_iter().take(n as usize).collect(),
-            })
+        let n: i32 = shape.clone().iter().product();
+        Ok(Tensor {
+            shape,
+            data: self.data.into_iter().take(n as usize).collect(),
         })
     }
 
     fn reverse(self, rank: Rank) -> TensorResult<T> {
-        self.and_then(|t| match rank {
+        match rank {
             Some(_) => Err(TensorError::NotImplementedYet),
             None => Ok(Tensor {
-                shape: t.shape,
-                data: t.data.into_iter().rev().collect(),
+                shape: self.shape,
+                data: self.data.into_iter().rev().collect(),
             }),
-        })
+        }
     }
 }
 
-impl TensorIntOps for TensorResult<i32> {
+impl TensorIntOps for Tensor<i32> {
     fn iota(self) -> TensorResult<i32> {
-        self.and_then(|t| {
-            if t.rank() > 1 {
-                return Err(TensorError::Rank);
-            }
-            let n: i32 = t.data.first().unwrap() + 1;
-            Ok(build_vector((1..n).collect()))
-        })
+        if self.rank() > 1 {
+            return Err(TensorError::Rank);
+        }
+        let n: i32 = self.data.first().unwrap() + 1;
+        Ok(build_vector((1..n).collect()))
     }
 
     fn product(self, rank: Rank) -> TensorResult<i32> {
@@ -126,42 +112,38 @@ impl TensorIntOps for TensorResult<i32> {
 
     fn outer_product(
         self,
-        other: TensorResult<i32>,
+        other: Tensor<i32>,
         binop: &dyn Fn(i32, i32) -> i32,
     ) -> TensorResult<i32> {
-        self.and_then(|t| {
-            other.and_then(|o| {
-                if t.rank() > 1 || o.rank() > 1 {
-                    return Err(TensorError::Rank);
-                }
-                let rows = t.shape.first().unwrap();
-                let cols = o.shape.first().unwrap();
-                let new_data = t
-                    .data
-                    .into_iter()
-                    .flat_map(|x| o.data.iter().map(move |y| binop(x, *y)))
-                    .collect::<Vec<_>>();
-                Ok(Tensor {
-                    shape: vec![*rows, *cols],
-                    data: new_data,
-                })
-            })
+        if self.rank() > 1 || other.rank() > 1 {
+            return Err(TensorError::Rank);
+        }
+        let rows = self.shape.first().unwrap();
+        let cols = other.shape.first().unwrap();
+        let new_data = self
+            .data
+            .into_iter()
+            .flat_map(|x| other.data.iter().map(move |y| binop(x, *y)))
+            .collect::<Vec<_>>();
+        Ok(Tensor {
+            shape: vec![*rows, *cols],
+            data: new_data,
         })
     }
 
     fn reduce(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32> {
-        self.and_then(|t| match rank {
+        match rank {
             None => Ok(Tensor {
                 shape: vec![],
-                data: vec![t.data.into_iter().reduce(binop).unwrap()],
+                data: vec![self.data.into_iter().reduce(binop).unwrap()],
             }),
             Some(1) => {
                 // TODO: only works for matrices
-                let new_shape: Vec<i32> = t.shape.clone().into_iter().skip(1).collect();
-                let chunk_size = t.shape.into_iter().nth(1).unwrap() as usize;
+                let new_shape: Vec<i32> = self.shape.clone().into_iter().skip(1).collect();
+                let chunk_size = self.shape.into_iter().nth(1).unwrap() as usize;
                 Ok(Tensor {
                     shape: new_shape,
-                    data: t
+                    data: self
                         .data
                         .chunks(chunk_size)
                         .fold(vec![0; chunk_size], |acc, chunk| {
@@ -174,11 +156,11 @@ impl TensorIntOps for TensorResult<i32> {
             }
             Some(2) => {
                 // TODO: only works for matrices
-                let new_shape: Vec<i32> = t.shape.clone().into_iter().take(1).collect();
-                let chunk_size = t.shape.into_iter().nth(1).unwrap() as usize;
+                let new_shape: Vec<i32> = self.shape.clone().into_iter().take(1).collect();
+                let chunk_size = self.shape.into_iter().nth(1).unwrap() as usize;
                 Ok(Tensor {
                     shape: new_shape,
-                    data: t
+                    data: self
                         .data
                         .chunks(chunk_size)
                         .map(|chunk| chunk.iter().copied().reduce(binop).unwrap())
@@ -186,18 +168,18 @@ impl TensorIntOps for TensorResult<i32> {
                 })
             }
             Some(_) => Err(TensorError::NotImplementedYet),
-        })
+        }
     }
 
     fn scan(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32> {
-        self.and_then(|t| match rank {
+        match rank {
             None => {
-                let first = t.data.iter().copied().next().unwrap();
+                let first = self.data.iter().copied().next().unwrap();
                 Ok(Tensor {
-                    shape: t.shape,
+                    shape: self.shape,
                     data: Some(first)
                         .into_iter()
-                        .chain(t.data.into_iter().skip(1).scan(first, |acc, x| {
+                        .chain(self.data.into_iter().skip(1).scan(first, |acc, x| {
                             *acc = binop(*acc, x);
                             Some(*acc)
                         }))
@@ -205,15 +187,13 @@ impl TensorIntOps for TensorResult<i32> {
                 })
             }
             Some(_) => Err(TensorError::NotImplementedYet),
-        })
+        }
     }
 
     fn sign(self) -> TensorResult<i32> {
-        self.and_then(|t| {
-            Ok(Tensor {
-                shape: t.shape,
-                data: t.data.into_iter().map(num::signum).collect(),
-            })
+        Ok(Tensor {
+            shape: self.shape,
+            data: self.data.into_iter().map(num::signum).collect(),
         })
     }
 
@@ -244,6 +224,14 @@ pub fn build_matrix<T>(shape: Vec<i32>, data: Vec<T>) -> Tensor<T> {
     Tensor { shape, data }
 }
 
+pub fn build_iota_matrix(shape: Vec<i32>) -> Tensor<i32> {
+    let n = shape.clone().into_iter().product();
+    Tensor {
+        shape,
+        data: (1..=n).collect(),
+    }
+}
+
 pub fn print_tensor(tr: TensorResult<i32>) {
     match tr {
         Err(e) => println!("{:?}", e),
@@ -266,8 +254,8 @@ pub fn print_tensor(tr: TensorResult<i32>) {
 }
 
 pub fn count_negatives(nums: Tensor<i32>) -> TensorResult<i32> {
-    let n = Ok(build_scalar(0));
-    Ok(nums).less_than(n).sum(None)
+    let n = build_scalar(0);
+    nums.less_than(n)?.sum(None)
 }
 
 // pub fn count_negatives(nums: Tensor) {
@@ -275,57 +263,57 @@ pub fn count_negatives(nums: Tensor<i32>) -> TensorResult<i32> {
 // }
 
 pub fn max_wealth(accounts: Tensor<i32>) -> TensorResult<i32> {
-    Ok(accounts).sum(Some(2)).maximum(None)
+    accounts.sum(Some(2))?.maximum(None)
 }
 
-// pub fn max_wealth(accounts: Tensor) {
-//     accounts.sum(1).maximum()
-// }
+// // pub fn max_wealth(accounts: Tensor) {
+// //     accounts.sum(1).maximum()
+// // }
 
 pub fn array_sign(arr: Tensor<i32>) -> TensorResult<i32> {
-    Ok(arr).sign().product(None)
+    arr.sign()?.product(None)
 }
 
-// pub fn array_sign(arr: Tensor<i32>) {
-//     arr.sign().product()
-// }
+// // pub fn array_sign(arr: Tensor<i32>) {
+// //     arr.sign().product()
+// // }
 
 pub fn mco(vec: Tensor<i32>) -> TensorResult<i32> {
     let op = |a, b| b * (a + b);
-    Ok(vec).scan(&op, None).maximum(None)
+    vec.scan(&op, None)?.maximum(None)
 }
 
-// pub fn mco(Tensor vector) {
-//     vector.scan(phi1(left, mul, plus))
-//           .maximum()
-// }
+// // pub fn mco(Tensor vector) {
+// //     vector.scan(phi1(left, mul, plus))
+// //           .maximum()
+// // }
 
-// pub fn check_matrix(Tensor grid) {
-//     grid.eye()
-//         .s(rev, id)
-//         .equal(grid.min(1))
-// }
+// // pub fn check_matrix(Tensor grid) {
+// //     grid.eye()
+// //         .s(rev, id)
+// //         .equal(grid.min(1))
+// // }
 
-// pub fn max_paren_depth(str equation) {
-//     equation.to_tensor()
-//             .outer("()")
-//             .reduce(num::minus, 1)
-//             .scan(num::plus)
-//             .maximum()
-// }
+// // pub fn max_paren_depth(str equation) {
+// //     equation.to_tensor()
+// //             .outer("()")
+// //             .reduce(num::minus, 1)
+// //             .scan(num::plus)
+// //             .maximum()
+// // }
 
 pub fn stringless_max_paren_depth(equation: Tensor<i32>) -> TensorResult<i32> {
-    let rhs = Ok(build_vector(vec![2, 3]));
-    Ok(equation)
-        .outer_product(rhs, &|a, b| (a == b).into())
-        .reduce(&Sub::sub, Some(2))
-        .scan(&Add::add, None)
+    let rhs = build_vector(vec![2, 3]);
+    equation
+        .outer_product(rhs, &|a, b| (a == b).into())?
+        .reduce(&Sub::sub, Some(2))?
+        .scan(&Add::add, None)?
         .maximum(None)
 }
 
 pub fn smaller_numbers_than_current(nums: Tensor<i32>) -> TensorResult<i32> {
-    Ok(nums.clone())
-        .outer_product(Ok(nums), &|a, b| (a > b).into())
+    nums.clone()
+        .outer_product(nums, &|a, b| (a > b).into())?
         .sum(Some(2))
 }
 
@@ -336,9 +324,18 @@ mod tests {
     #[test]
     fn test_first() {
         {
-            let input = Ok(build_vector(vec![1, 2, 3]));
-            let expected = Ok(build_scalar(1));
-            assert_eq!(input.first(), expected);
+            let input = build_vector(vec![1, 2, 3]);
+            let expected = build_scalar(1);
+            assert_eq!(input.first().unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_reverse() {
+        {
+            let input = build_vector(vec![1, 2, 3]);
+            let expected = build_vector(vec![3, 2, 1]);
+            assert_eq!(input.reverse(None).unwrap(), expected);
         }
     }
 
@@ -346,21 +343,21 @@ mod tests {
     fn test_matrix_sums() {
         {
             // matrix sum
-            let input = Ok(build_scalar(9)).iota().reshape(vec![3, 3]);
-            let expected = Ok(build_scalar(45));
-            assert_eq!(input.sum(None), expected);
+            let input = build_matrix(vec![3, 3], vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+            let expected = build_scalar(45);
+            assert_eq!(input.sum(None).unwrap(), expected);
         }
         {
             // column sums
-            let input = Ok(build_scalar(9)).iota().reshape(vec![3, 3]);
-            let expected = Ok(build_vector(vec![12, 15, 18]));
-            assert_eq!(input.sum(Some(1)), expected);
+            let input = build_matrix(vec![3, 3], vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+            let expected = build_vector(vec![12, 15, 18]);
+            assert_eq!(input.sum(Some(1)).unwrap(), expected);
         }
         {
             // row sums
-            let input = Ok(build_scalar(9)).iota().reshape(vec![3, 3]);
-            let expected = Ok(build_vector(vec![6, 15, 24]));
-            assert_eq!(input.sum(Some(2)), expected);
+            let input = build_matrix(vec![3, 3], vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+            let expected = build_vector(vec![6, 15, 24]);
+            assert_eq!(input.sum(Some(2)).unwrap(), expected);
         }
     }
 
@@ -368,31 +365,28 @@ mod tests {
     fn test_matrix_maximums() {
         {
             // matrix maximum
-            let input = Ok(build_scalar(9)).iota().reshape(vec![3, 3]);
-            let expected = Ok(build_scalar(9));
-            assert_eq!(input.maximum(None), expected);
+            let input = build_matrix(vec![3, 3], vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+            let expected = build_scalar(9);
+            assert_eq!(input.maximum(None).unwrap(), expected);
         }
         {
             // column maximums
-            let input = Ok(build_scalar(9)).iota().reshape(vec![3, 3]);
-            let expected = Ok(build_vector(vec![7, 8, 9]));
-            assert_eq!(input.maximum(Some(1)), expected);
+            let input = build_matrix(vec![3, 3], vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+            let expected = build_vector(vec![7, 8, 9]);
+            assert_eq!(input.maximum(Some(1)).unwrap(), expected);
         }
         {
             // row maximums
-            let input = Ok(build_scalar(9)).iota().reshape(vec![3, 3]);
-            let expected = Ok(build_vector(vec![3, 6, 9]));
-            assert_eq!(input.maximum(Some(2)), expected);
+            let input = build_matrix(vec![3, 3], vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+            let expected = build_vector(vec![3, 6, 9]);
+            assert_eq!(input.maximum(Some(2)).unwrap(), expected);
         }
     }
 
     #[test]
     fn test_matrix_iota() {
-        let iota_matrix = Ok(build_scalar(12)).iota().reshape(vec![3, 4]);
-        let expected = Ok(build_matrix(
-            vec![3, 4],
-            vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
-        ));
+        let iota_matrix = build_iota_matrix(vec![3, 4]);
+        let expected = build_matrix(vec![3, 4], vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
         assert_eq!(iota_matrix, expected);
     }
 
@@ -401,16 +395,16 @@ mod tests {
         // https://leetcode.com/problems/count-negative-numbers-in-a-sorted-matrix/
         {
             let input = build_matrix(vec![2, 2], vec![-1, -2, 3, 4]);
-            let expected = Ok(build_scalar(2));
-            assert_eq!(count_negatives(input), expected);
+            let expected = build_scalar(2);
+            assert_eq!(count_negatives(input).unwrap(), expected);
         }
         {
             let input = build_matrix(
                 vec![4, 4],
                 vec![4, 3, 2, -1, 3, 2, 1, -1, 1, 1, -1, -2, -1, -1, -2, -3],
             );
-            let expected = Ok(build_scalar(8));
-            assert_eq!(count_negatives(input), expected);
+            let expected = build_scalar(8);
+            assert_eq!(count_negatives(input).unwrap(), expected);
         }
     }
 
@@ -419,18 +413,18 @@ mod tests {
         // https://leetcode.com/problems/richest-customer-wealth/
         {
             let input = build_matrix(vec![2, 3], vec![1, 2, 3, 3, 2, 1]);
-            let expected = Ok(build_scalar(6));
-            assert_eq!(max_wealth(input), expected);
+            let expected = build_scalar(6);
+            assert_eq!(max_wealth(input).unwrap(), expected);
         }
         {
             let input = build_matrix(vec![3, 2], vec![1, 5, 7, 3, 3, 5]);
-            let expected = Ok(build_scalar(10));
-            assert_eq!(max_wealth(input), expected);
+            let expected = build_scalar(10);
+            assert_eq!(max_wealth(input).unwrap(), expected);
         }
         {
             let input = build_matrix(vec![3, 3], vec![2, 8, 7, 7, 1, 3, 1, 9, 5]);
-            let expected = Ok(build_scalar(17));
-            assert_eq!(max_wealth(input), expected);
+            let expected = build_scalar(17);
+            assert_eq!(max_wealth(input).unwrap(), expected);
         }
     }
 
@@ -439,18 +433,18 @@ mod tests {
         // https://leetcode.com/problems/sign-of-the-product-of-an-array/
         {
             let input = build_vector(vec![-1, -2, -3, -4, 3, 2, 1]);
-            let expected = Ok(build_scalar(1));
-            assert_eq!(array_sign(input), expected);
+            let expected = build_scalar(1);
+            assert_eq!(array_sign(input).unwrap(), expected);
         }
         {
             let input = build_vector(vec![1, 5, 0, 2, -3]);
-            let expected = Ok(build_scalar(0));
-            assert_eq!(array_sign(input), expected);
+            let expected = build_scalar(0);
+            assert_eq!(array_sign(input).unwrap(), expected);
         }
         {
             let input = build_vector(vec![-1, 1, -1, 1, -1]);
-            let expected = Ok(build_scalar(-1));
-            assert_eq!(array_sign(input), expected);
+            let expected = build_scalar(-1);
+            assert_eq!(array_sign(input).unwrap(), expected);
         }
     }
 
@@ -459,13 +453,13 @@ mod tests {
         // https://leetcode.com/problems/max-consecutive-ones/
         {
             let input = build_vector(vec![1, 1, 0, 1, 1, 1]);
-            let expected = Ok(build_scalar(3));
-            assert_eq!(mco(input), expected);
+            let expected = build_scalar(3);
+            assert_eq!(mco(input).unwrap(), expected);
         }
         {
             let input = build_vector(vec![1, 0, 1, 1, 0, 1]);
-            let expected = Ok(build_scalar(2));
-            assert_eq!(mco(input), expected);
+            let expected = build_scalar(2);
+            assert_eq!(mco(input).unwrap(), expected);
         }
     }
 
@@ -473,15 +467,15 @@ mod tests {
     fn test_outer_product() {
         let lhs = build_vector(vec![1, 2, 3]);
         let rhs = build_vector(vec![1, 2, 3]);
-        let expected = Ok(build_matrix(vec![3, 3], vec![2, 3, 4, 3, 4, 5, 4, 5, 6]));
-        assert_eq!(Ok(lhs).outer_product(Ok(rhs), &Add::add), expected);
+        let expected = build_matrix(vec![3, 3], vec![2, 3, 4, 3, 4, 5, 4, 5, 6]);
+        assert_eq!(lhs.outer_product(rhs, &Add::add).unwrap(), expected);
     }
 
     #[test]
     fn test_stringless_max_paren_depth() {
         let input = build_vector(vec![2, 2, 4, 5, 3, 2, 2, 3, 3, 8, 3, 3]);
-        let expected = Ok(build_scalar(3));
-        assert_eq!(stringless_max_paren_depth(input), expected);
+        let expected = build_scalar(3);
+        assert_eq!(stringless_max_paren_depth(input).unwrap(), expected);
     }
 
     #[test]
@@ -489,18 +483,18 @@ mod tests {
         // https://leetcode.com/problems/how-many-numbers-are-smaller-than-the-current-number/
         {
             let input = build_vector(vec![8, 1, 2, 2, 3]);
-            let expected = Ok(build_vector(vec![4, 0, 1, 1, 3]));
-            assert_eq!(smaller_numbers_than_current(input), expected);
+            let expected = build_vector(vec![4, 0, 1, 1, 3]);
+            assert_eq!(smaller_numbers_than_current(input).unwrap(), expected);
         }
         {
             let input = build_vector(vec![6, 5, 4, 8]);
-            let expected = Ok(build_vector(vec![2, 1, 0, 3]));
-            assert_eq!(smaller_numbers_than_current(input), expected);
+            let expected = build_vector(vec![2, 1, 0, 3]);
+            assert_eq!(smaller_numbers_than_current(input).unwrap(), expected);
         }
         {
             let input = build_vector(vec![7, 7, 7, 7]);
-            let expected = Ok(build_vector(vec![0, 0, 0, 0]));
-            assert_eq!(smaller_numbers_than_current(input), expected);
+            let expected = build_vector(vec![0, 0, 0, 0]);
+            assert_eq!(smaller_numbers_than_current(input).unwrap(), expected);
         }
     }
 
