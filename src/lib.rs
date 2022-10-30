@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use num;
+use std::collections::HashSet;
 use std::convert::TryInto;
 use std::ops::{Add, Mul, Sub};
 
@@ -29,6 +29,7 @@ pub trait TensorOps {
     type Item;
 
     fn first(self) -> Tensor<Self::Item>;
+    fn intersection(self, other: Tensor<Self::Item>) -> TensorResult<Self::Item>;
     fn reshape(self, shape: Vec<i32>) -> Tensor<Self::Item>;
     fn reverse(self, rank: Rank) -> TensorResult<Self::Item>;
     fn unique(self) -> TensorResult<Self::Item>;
@@ -61,6 +62,7 @@ pub trait TensorIntOps {
 
     // Reduce Specializations
     fn maximum(self, rank: Rank) -> TensorResult<i32>;
+    fn minimum(self, rank: Rank) -> TensorResult<i32>;
     fn product(self, rank: Rank) -> TensorResult<i32>;
     fn sum(self, rank: Rank) -> TensorResult<i32>;
 }
@@ -86,6 +88,23 @@ impl<
             shape: vec![],
             data: self.data.into_iter().take(1).collect(),
         }
+    }
+
+    fn intersection(self, other: Tensor<Self::Item>) -> TensorResult<Self::Item> {
+        if self.rank() > 1 {
+            return Err(TensorError::Rank);
+        }
+        let new_data = self
+            .data
+            .into_iter()
+            .collect::<HashSet<_>>()
+            .intersection(&other.data.into_iter().collect::<HashSet<_>>())
+            .copied()
+            .collect::<Vec<_>>();
+        Ok(Tensor {
+            shape: vec![new_data.len() as i32],
+            data: new_data,
+        })
     }
 
     fn scalar_binary_operation(
@@ -251,6 +270,10 @@ impl TensorIntOps for Tensor<i32> {
     fn maximum(self, rank: Rank) -> TensorResult<i32> {
         self.reduce(&std::cmp::max, rank)
     }
+
+    fn minimum(self, rank: Rank) -> TensorResult<i32> {
+        self.reduce(&std::cmp::min, rank)
+    }
 }
 
 pub fn build_scalar(data: i32) -> Tensor<i32> {
@@ -370,6 +393,13 @@ pub fn find_pairs(nums: Tensor<i32>, k: i32) -> TensorResult<i32> {
         .outer_product(uniq, &Sub::sub)?
         .equal(build_scalar(k))?
         .sum(None)
+}
+
+pub fn lucky_numbers(matrix: Tensor<i32>) -> TensorResult<i32> {
+    matrix
+        .clone()
+        .minimum(Some(2))?
+        .intersection(matrix.maximum(Some(1))?)
 }
 
 #[cfg(test)]
@@ -565,6 +595,26 @@ mod tests {
             let input = build_vector((1..=5).collect());
             let expected = build_scalar(4);
             assert_eq!(find_pairs(input, 1).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_lucky_numbers() {
+        // https://leetcode.com/problems/lucky-numbers-in-a-matrix/
+        {
+            let input = build_matrix(vec![3, 3], vec![3, 7, 8, 9, 11, 13, 15, 16, 17]);
+            let expected = build_vector(vec![15]);
+            assert_eq!(lucky_numbers(input).unwrap(), expected);
+        }
+        {
+            let input = build_matrix(vec![4, 4], vec![1, 10, 4, 2, 9, 3, 8, 7, 15, 16, 17, 12]);
+            let expected = build_vector(vec![12]);
+            assert_eq!(lucky_numbers(input).unwrap(), expected);
+        }
+        {
+            let input = build_matrix(vec![2, 2], vec![7, 8, 1, 2]);
+            let expected = build_vector(vec![7]);
+            assert_eq!(lucky_numbers(input).unwrap(), expected);
         }
     }
 }
