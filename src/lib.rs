@@ -97,16 +97,15 @@ impl<
         if self.rank() > 1 {
             return Err(TensorError::Rank);
         }
-        let new_data = self
-            .data
-            .into_iter()
-            .collect::<HashSet<_>>()
-            .intersection(&other.data.into_iter().collect::<HashSet<_>>())
-            .copied()
-            .collect::<Vec<_>>();
         Ok(Tensor {
             shape: vec![new_data.len() as i32],
-            data: new_data,
+            data: self
+                .data
+                .into_iter()
+                .collect::<HashSet<_>>()
+                .intersection(&other.data.into_iter().collect::<HashSet<_>>())
+                .copied()
+                .collect::<Vec<_>>(),
         })
     }
 
@@ -204,14 +203,13 @@ impl TensorIntOps for Tensor<i32> {
         }
         let rows = self.shape.first().unwrap();
         let cols = other.shape.first().unwrap();
-        let new_data = self
-            .data
-            .into_iter()
-            .flat_map(|x| other.data.iter().map(move |y| binop(x, *y)))
-            .collect::<Vec<_>>();
         Ok(Tensor {
             shape: vec![*rows, *cols],
-            data: new_data,
+            data: self
+                .data
+                .into_iter()
+                .flat_map(|x| other.data.iter().map(move |y| binop(x, *y)))
+                .collect::<Vec<_>>(),
         })
     }
 
