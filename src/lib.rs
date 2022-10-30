@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use num;
 use std::convert::TryInto;
 use std::ops::{Add, Mul, Sub};
@@ -28,9 +29,13 @@ pub trait TensorOps {
     type Item;
 
     fn first(self) -> Tensor<Self::Item>;
-    fn less_than(self, other: Tensor<Self::Item>) -> TensorResult<i32>;
     fn reshape(self, shape: Vec<i32>) -> Tensor<Self::Item>;
     fn reverse(self, rank: Rank) -> TensorResult<Self::Item>;
+    fn unique(self) -> TensorResult<Self::Item>;
+
+    // Binary Scalar Functions
+    fn equal(self, other: Tensor<Self::Item>) -> TensorResult<i32>;
+    fn less_than(self, other: Tensor<Self::Item>) -> TensorResult<i32>;
 }
 
 pub trait TensorIntOps {
@@ -61,8 +66,24 @@ impl<T> TensorFns for Tensor<T> {
     }
 }
 
-impl<T: std::cmp::PartialOrd<T>> TensorOps for Tensor<T> {
+impl<T: std::cmp::PartialOrd<T> + std::hash::Hash + std::cmp::Eq + std::clone::Clone> TensorOps
+    for Tensor<T>
+{
     type Item = T;
+
+    fn equal(self, other: Tensor<T>) -> TensorResult<i32> {
+        if other.rank() == 0 {
+            let n = other.data.first().unwrap();
+            return Ok(Tensor {
+                shape: self.shape,
+                data: self.data.into_iter().map(|x| (x == *n).into()).collect(),
+            });
+        }
+        if self.shape == other.shape {
+            return Err(TensorError::NotImplementedYet);
+        }
+        Err(TensorError::Shape)
+    }
 
     fn first(self) -> Tensor<T> {
         Tensor {
@@ -72,8 +93,8 @@ impl<T: std::cmp::PartialOrd<T>> TensorOps for Tensor<T> {
     }
 
     fn less_than(self, other: Tensor<T>) -> TensorResult<i32> {
-        let n = other.data.first().unwrap();
         if other.rank() == 0 {
+            let n = other.data.first().unwrap();
             return Ok(Tensor {
                 shape: self.shape,
                 data: self.data.into_iter().map(|x| (x < *n).into()).collect(),
@@ -101,6 +122,17 @@ impl<T: std::cmp::PartialOrd<T>> TensorOps for Tensor<T> {
                 data: self.data.into_iter().rev().collect(),
             }),
         }
+    }
+
+    fn unique(self) -> TensorResult<T> {
+        if self.rank() > 1 {
+            return Err(TensorError::Rank);
+        }
+        let new_data: Vec<_> = self.data.into_iter().unique().collect();
+        Ok(Tensor {
+            shape: vec![new_data.len() as i32],
+            data: new_data,
+        })
     }
 }
 
@@ -324,6 +356,14 @@ pub fn smaller_numbers_than_current(nums: Tensor<i32>) -> TensorResult<i32> {
         .sum(Some(2))
 }
 
+pub fn find_pairs(nums: Tensor<i32>, k: i32) -> TensorResult<i32> {
+    let uniq = nums.unique()?;
+    uniq.clone()
+        .outer_product(uniq, &Sub::sub)?
+        .equal(build_scalar(k))?
+        .sum(None)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -505,6 +545,18 @@ mod tests {
         }
     }
 
-    // TODO:
-    // https://leetcode.com/problems/k-diff-pairs-in-an-array/
+    #[test]
+    fn test_find_pairs() {
+        // https://leetcode.com/problems/k-diff-pairs-in-an-array/
+        {
+            let input = build_vector(vec![3, 1, 4, 1, 5]);
+            let expected = build_scalar(2);
+            assert_eq!(find_pairs(input, 2).unwrap(), expected);
+        }
+        {
+            let input = build_vector((1..=5).collect());
+            let expected = build_scalar(4);
+            assert_eq!(find_pairs(input, 1).unwrap(), expected);
+        }
+    }
 }
