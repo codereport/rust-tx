@@ -34,6 +34,11 @@ pub trait TensorOps {
     fn unique(self) -> TensorResult<Self::Item>;
 
     // Binary Scalar Functions
+    fn scalar_binary_operation(
+        self,
+        other: Tensor<Self::Item>,
+        binop: &dyn Fn(Self::Item, Self::Item) -> i32,
+    ) -> TensorResult<i32>;
     fn equal(self, other: Tensor<Self::Item>) -> TensorResult<i32>;
     fn less_than(self, other: Tensor<Self::Item>) -> TensorResult<i32>;
 }
@@ -66,24 +71,15 @@ impl<T> TensorFns for Tensor<T> {
     }
 }
 
-impl<T: std::cmp::PartialOrd<T> + std::hash::Hash + std::cmp::Eq + std::clone::Clone> TensorOps
-    for Tensor<T>
+impl<
+        T: std::cmp::PartialOrd<T>
+            + std::hash::Hash
+            + std::cmp::Eq
+            + std::clone::Clone
+            + std::marker::Copy,
+    > TensorOps for Tensor<T>
 {
     type Item = T;
-
-    fn equal(self, other: Tensor<T>) -> TensorResult<i32> {
-        if other.rank() == 0 {
-            let n = other.data.first().unwrap();
-            return Ok(Tensor {
-                shape: self.shape,
-                data: self.data.into_iter().map(|x| (x == *n).into()).collect(),
-            });
-        }
-        if self.shape == other.shape {
-            return Err(TensorError::NotImplementedYet);
-        }
-        Err(TensorError::Shape)
-    }
 
     fn first(self) -> Tensor<T> {
         Tensor {
@@ -92,18 +88,30 @@ impl<T: std::cmp::PartialOrd<T> + std::hash::Hash + std::cmp::Eq + std::clone::C
         }
     }
 
-    fn less_than(self, other: Tensor<T>) -> TensorResult<i32> {
+    fn scalar_binary_operation(
+        self,
+        other: Tensor<T>,
+        binop: &dyn Fn(T, T) -> i32,
+    ) -> TensorResult<i32> {
         if other.rank() == 0 {
             let n = other.data.first().unwrap();
             return Ok(Tensor {
                 shape: self.shape,
-                data: self.data.into_iter().map(|x| (x < *n).into()).collect(),
+                data: self.data.into_iter().map(|x| binop(x, *n)).collect(),
             });
         }
         if self.shape == other.shape {
             return Err(TensorError::NotImplementedYet);
         }
         Err(TensorError::Shape)
+    }
+
+    fn equal(self, other: Tensor<T>) -> TensorResult<i32> {
+        self.scalar_binary_operation(other, &|a, b| (a == b).into())
+    }
+
+    fn less_than(self, other: Tensor<T>) -> TensorResult<i32> {
+        self.scalar_binary_operation(other, &|a, b| (a < b).into())
     }
 
     fn reshape(self, shape: Vec<i32>) -> Tensor<T> {
