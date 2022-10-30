@@ -22,6 +22,7 @@ pub struct Tensor<T> {
 type TensorResult<T> = Result<Tensor<T>, TensorError>;
 
 pub trait TensorFns {
+    fn len(&self) -> Tensor<i32>;
     fn rank(&self) -> i32;
 }
 
@@ -62,6 +63,7 @@ pub trait TensorIntOps {
     ) -> TensorResult<i32>;
     fn reduce(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32>;
     fn scan(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32>;
+    fn triangle_product(self, binop: &dyn Fn(i32, i32) -> i32) -> TensorResult<i32>;
 
     // Reduce Specializations
     fn maximum(self, rank: Rank) -> TensorResult<i32>;
@@ -71,6 +73,13 @@ pub trait TensorIntOps {
 }
 
 impl<T> TensorFns for Tensor<T> {
+    fn len(&self) -> Tensor<i32> {
+        Tensor {
+            shape: vec![0],
+            data: vec![*self.shape.first().unwrap()],
+        }
+    }
+
     fn rank(&self) -> i32 {
         self.shape.len() as i32
     }
@@ -218,6 +227,28 @@ impl TensorIntOps for Tensor<i32> {
                 .data
                 .into_iter()
                 .flat_map(|x| other.data.iter().map(move |y| binop(x, *y)))
+                .collect::<Vec<_>>(),
+        })
+    }
+
+    fn triangle_product(self, binop: &dyn Fn(i32, i32) -> i32) -> TensorResult<i32> {
+        if self.rank() > 1 {
+            return Err(TensorError::Rank);
+        }
+        let n = self.shape.first().unwrap();
+        Ok(Tensor {
+            shape: vec![*n, *n],
+            data: self
+                .data
+                .iter()
+                .copied()
+                .enumerate()
+                .flat_map(|(i, x)| {
+                    self.data
+                        .iter()
+                        .enumerate()
+                        .map(move |(j, y)| if j > i { binop(x, *y) } else { 0 })
+                })
                 .collect::<Vec<_>>(),
         })
     }
@@ -425,6 +456,10 @@ pub fn num_special(mat: Tensor<i32>) -> TensorResult<i32> {
         .multiply(mat.sum(Some(2))?)?
         .equal(build_scalar(1))?
         .sum(None)
+}
+
+pub fn num_identical_pairs(nums: Tensor<i32>) -> TensorResult<i32> {
+    nums.triangle_product(&|a, b| (a == b).into())?.sum(None)
 }
 
 #[cfg(test)]
@@ -657,6 +692,26 @@ mod tests {
             let input = build_matrix(vec![3, 3], vec![1, 0, 0, 0, 1, 0, 0, 0, 1]);
             let expected = build_scalar(3);
             assert_eq!(num_special(input).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_num_identical_pairs() {
+        // https://leetcode.com/problems/number-of-good-pairs/
+        {
+            let input = build_vector(vec![1, 2, 3, 1, 1, 3]);
+            let expected = build_scalar(4);
+            assert_eq!(num_identical_pairs(input).unwrap(), expected);
+        }
+        {
+            let input = build_vector(vec![1, 1, 1, 1]);
+            let expected = build_scalar(6);
+            assert_eq!(num_identical_pairs(input).unwrap(), expected);
+        }
+        {
+            let input = build_vector(vec![1, 2, 3]);
+            let expected = build_scalar(0);
+            assert_eq!(num_identical_pairs(input).unwrap(), expected);
         }
     }
 }
