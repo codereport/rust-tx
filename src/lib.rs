@@ -97,15 +97,16 @@ impl<
         if self.rank() > 1 {
             return Err(TensorError::Rank);
         }
+        let new_data = self
+            .data
+            .into_iter()
+            .collect::<HashSet<_>>()
+            .intersection(&other.data.into_iter().collect::<HashSet<_>>())
+            .copied()
+            .collect::<Vec<_>>();
         Ok(Tensor {
             shape: vec![new_data.len() as i32],
-            data: self
-                .data
-                .into_iter()
-                .collect::<HashSet<_>>()
-                .intersection(&other.data.into_iter().collect::<HashSet<_>>())
-                .copied()
-                .collect::<Vec<_>>(),
+            data: new_data,
         })
     }
 
