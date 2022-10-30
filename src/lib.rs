@@ -46,7 +46,7 @@ pub trait TensorOps {
 
 pub trait TensorIntOps {
     // Unary Functions
-    fn iota(self) -> TensorResult<i32>;
+    fn iota(self) -> Tensor<i32>;
 
     // Unary Scalar Functions
     fn sign(self) -> TensorResult<i32>;
@@ -178,12 +178,20 @@ impl<
 }
 
 impl TensorIntOps for Tensor<i32> {
-    fn iota(self) -> TensorResult<i32> {
-        if self.rank() > 1 {
-            return Err(TensorError::Rank);
+    fn iota(self) -> Tensor<i32> {
+        if self.rank() == 0 {
+            let n: i32 = self.data.first().unwrap() + 1;
+            return build_vector((1..n).collect());
+        } else if self.rank() == 1 {
+            let n = self.data.clone().into_iter().product();
+            return Tensor {
+                shape: self.data,
+                data: (1..=n).collect(),
+            };
         }
-        let n: i32 = self.data.first().unwrap() + 1;
-        Ok(build_vector((1..n).collect()))
+        // TODO: implement here
+        // don't return TensorError::NotImplementedYet so i can in tests (without ?)
+        build_scalar(-1)
     }
 
     fn multiply(self, other: Tensor<i32>) -> TensorResult<i32> {
@@ -311,14 +319,6 @@ pub fn build_matrix<T>(shape: Vec<i32>, data: Vec<T>) -> Tensor<T> {
     Tensor { shape, data }
 }
 
-pub fn build_iota_matrix(shape: Vec<i32>) -> Tensor<i32> {
-    let n = shape.clone().into_iter().product();
-    Tensor {
-        shape,
-        data: (1..=n).collect(),
-    }
-}
-
 pub fn print_tensor(tr: TensorResult<i32>) {
     match tr {
         Err(e) => println!("{:?}", e),
@@ -441,9 +441,18 @@ mod tests {
     }
 
     #[test]
+    fn test_iota() {
+        {
+            let input = build_scalar(3);
+            let expected = build_vector(vec![1, 2, 3]);
+            assert_eq!(input.iota(), expected);
+        }
+    }
+
+    #[test]
     fn test_reverse() {
         {
-            let input = build_vector(vec![1, 2, 3]);
+            let input = build_scalar(3).iota();
             let expected = build_vector(vec![3, 2, 1]);
             assert_eq!(input.reverse(None).unwrap(), expected);
         }
@@ -453,19 +462,19 @@ mod tests {
     fn test_matrix_sums() {
         {
             // matrix sum
-            let input = build_matrix(vec![3, 3], vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+            let input = build_vector(vec![3, 3]).iota();
             let expected = build_scalar(45);
             assert_eq!(input.sum(None).unwrap(), expected);
         }
         {
             // column sums
-            let input = build_matrix(vec![3, 3], vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+            let input = build_vector(vec![3, 3]).iota();
             let expected = build_vector(vec![12, 15, 18]);
             assert_eq!(input.sum(Some(1)).unwrap(), expected);
         }
         {
             // row sums
-            let input = build_matrix(vec![3, 3], vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+            let input = build_vector(vec![3, 3]).iota();
             let expected = build_vector(vec![6, 15, 24]);
             assert_eq!(input.sum(Some(2)).unwrap(), expected);
         }
@@ -475,29 +484,22 @@ mod tests {
     fn test_matrix_maximums() {
         {
             // matrix maximum
-            let input = build_matrix(vec![3, 3], vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+            let input = build_vector(vec![3, 3]).iota();
             let expected = build_scalar(9);
             assert_eq!(input.maximum(None).unwrap(), expected);
         }
         {
             // column maximums
-            let input = build_matrix(vec![3, 3], vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+            let input = build_vector(vec![3, 3]).iota();
             let expected = build_vector(vec![7, 8, 9]);
             assert_eq!(input.maximum(Some(1)).unwrap(), expected);
         }
         {
             // row maximums
-            let input = build_matrix(vec![3, 3], vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+            let input = build_vector(vec![3, 3]).iota();
             let expected = build_vector(vec![3, 6, 9]);
             assert_eq!(input.maximum(Some(2)).unwrap(), expected);
         }
-    }
-
-    #[test]
-    fn test_matrix_iota() {
-        let iota_matrix = build_iota_matrix(vec![3, 4]);
-        let expected = build_matrix(vec![3, 4], vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
-        assert_eq!(iota_matrix, expected);
     }
 
     #[test]
