@@ -51,6 +51,9 @@ pub trait TensorIntOps {
     // Unary Scalar Functions
     fn sign(self) -> TensorResult<i32>;
 
+    // Binary Scalar Functions
+    fn multiply(self, other: Tensor<i32>) -> TensorResult<i32>;
+
     // HOFs
     fn outer_product(
         self,
@@ -119,8 +122,19 @@ impl<
                 data: self.data.into_iter().map(|x| binop(x, *n)).collect(),
             });
         }
-        if self.shape == other.shape {
+        if self.rank() == 0 {
             return Err(TensorError::NotImplementedYet);
+        }
+        if self.shape == other.shape {
+            return Ok(Tensor {
+                shape: self.shape,
+                data: self
+                    .data
+                    .into_iter()
+                    .zip(other.data.into_iter())
+                    .map(|(a, b)| binop(a, b))
+                    .collect(),
+            });
         }
         Err(TensorError::Shape)
     }
@@ -170,6 +184,10 @@ impl TensorIntOps for Tensor<i32> {
         }
         let n: i32 = self.data.first().unwrap() + 1;
         Ok(build_vector((1..n).collect()))
+    }
+
+    fn multiply(self, other: Tensor<i32>) -> TensorResult<i32> {
+        self.scalar_binary_operation(other, &Mul::mul)
     }
 
     fn product(self, rank: Rank) -> TensorResult<i32> {
@@ -402,6 +420,14 @@ pub fn lucky_numbers(matrix: Tensor<i32>) -> TensorResult<i32> {
         .intersection(matrix.maximum(Some(1))?)
 }
 
+pub fn num_special(mat: Tensor<i32>) -> TensorResult<i32> {
+    mat.clone()
+        .sum(Some(1))?
+        .multiply(mat.sum(Some(2))?)?
+        .equal(build_scalar(1))?
+        .sum(None)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -615,6 +641,21 @@ mod tests {
             let input = build_matrix(vec![2, 2], vec![7, 8, 1, 2]);
             let expected = build_vector(vec![7]);
             assert_eq!(lucky_numbers(input).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_num_special() {
+        // https://leetcode.com/problems/special-positions-in-a-binary-matrix/
+        {
+            let input = build_matrix(vec![3, 3], vec![1, 0, 0, 0, 0, 1, 1, 0, 0]);
+            let expected = build_scalar(1);
+            assert_eq!(num_special(input).unwrap(), expected);
+        }
+        {
+            let input = build_matrix(vec![3, 3], vec![1, 0, 0, 0, 1, 0, 0, 0, 1]);
+            let expected = build_scalar(3);
+            assert_eq!(num_special(input).unwrap(), expected);
         }
     }
 }
