@@ -33,6 +33,7 @@ pub trait TensorOps {
     fn intersection(self, other: Tensor<Self::Item>) -> TensorResult<Self::Item>;
     fn reshape(self, shape: Vec<i32>) -> Tensor<Self::Item>;
     fn reverse(self, rank: Rank) -> TensorResult<Self::Item>;
+    fn sort(self) -> TensorResult<Self::Item>;
     fn unique(self) -> TensorResult<Self::Item>;
 
     // Binary Scalar Functions
@@ -43,6 +44,7 @@ pub trait TensorOps {
     ) -> TensorResult<i32>;
     fn equal(self, other: Tensor<Self::Item>) -> TensorResult<i32>;
     fn less_than(self, other: Tensor<Self::Item>) -> TensorResult<i32>;
+    fn less_than_or_equal(self, other: Tensor<Self::Item>) -> TensorResult<i32>;
 }
 
 pub trait TensorIntOps {
@@ -90,7 +92,8 @@ impl<
             + std::hash::Hash
             + std::cmp::Eq
             + std::clone::Clone
-            + std::marker::Copy,
+            + std::marker::Copy
+            + std::cmp::Ord,
     > TensorOps for Tensor<T>
 {
     type Item = T;
@@ -156,6 +159,10 @@ impl<
         self.scalar_binary_operation(other, &|a, b| (a < b).into())
     }
 
+    fn less_than_or_equal(self, other: Tensor<T>) -> TensorResult<i32> {
+        self.scalar_binary_operation(other, &|a, b| (a <= b).into())
+    }
+
     fn reshape(self, shape: Vec<i32>) -> Tensor<T> {
         let n: i32 = shape.clone().iter().product();
         Tensor {
@@ -172,6 +179,16 @@ impl<
                 data: self.data.into_iter().rev().collect(),
             }),
         }
+    }
+
+    fn sort(self) -> TensorResult<T> {
+        if self.rank() > 1 {
+            return Err(TensorError::NotImplementedYet);
+        }
+        Ok(Tensor {
+            shape: self.shape,
+            data: self.data.into_iter().sorted().collect(),
+        })
     }
 
     fn unique(self) -> TensorResult<T> {
@@ -462,6 +479,14 @@ pub fn num_identical_pairs(nums: Tensor<i32>) -> TensorResult<i32> {
     nums.triangle_product(&|a, b| (a == b).into())?.sum(None)
 }
 
+pub fn max_ice_cream(costs: Tensor<i32>, coins: Tensor<i32>) -> TensorResult<i32> {
+    costs
+        .sort()?
+        .scan(&Add::add, None)?
+        .less_than_or_equal(coins)?
+        .sum(None)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -712,6 +737,26 @@ mod tests {
             let input = build_vector(vec![1, 2, 3]);
             let expected = build_scalar(0);
             assert_eq!(num_identical_pairs(input).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_max_ice_cream() {
+        // https://leetcode.com/problems/maximum-ice-cream-bars/
+        {
+            let input = build_vector(vec![1, 3, 2, 4, 1]);
+            let expected = build_scalar(4);
+            assert_eq!(max_ice_cream(input, build_scalar(7)).unwrap(), expected);
+        }
+        {
+            let input = build_vector(vec![10, 6, 8, 7, 7, 8]);
+            let expected = build_scalar(0);
+            assert_eq!(max_ice_cream(input, build_scalar(5)).unwrap(), expected);
+        }
+        {
+            let input = build_vector(vec![1, 6, 3, 1, 2, 5]);
+            let expected = build_scalar(6);
+            assert_eq!(max_ice_cream(input, build_scalar(20)).unwrap(), expected);
         }
     }
 }
