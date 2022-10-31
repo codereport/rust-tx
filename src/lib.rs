@@ -66,6 +66,11 @@ pub trait TensorIntOps {
     fn reduce(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32>;
     fn scan(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32>;
     fn triangle_product(self, binop: &dyn Fn(i32, i32) -> i32) -> TensorResult<i32>;
+    fn windowed_reduce(
+        self,
+        window_size: usize,
+        binop: &dyn Fn(i32, i32) -> i32,
+    ) -> TensorResult<i32>;
 
     // Reduce Specializations
     fn maximum(self, rank: Rank) -> TensorResult<i32>;
@@ -77,7 +82,7 @@ pub trait TensorIntOps {
 impl<T> TensorFns for Tensor<T> {
     fn len(&self) -> Tensor<i32> {
         Tensor {
-            shape: vec![0],
+            shape: vec![],
             data: vec![*self.shape.first().unwrap()],
         }
     }
@@ -267,6 +272,24 @@ impl TensorIntOps for Tensor<i32> {
                         .map(move |(j, y)| if j > i { binop(x, *y) } else { 0 })
                 })
                 .collect::<Vec<_>>(),
+        })
+    }
+
+    fn windowed_reduce(
+        self,
+        window_size: usize,
+        binop: &dyn Fn(i32, i32) -> i32,
+    ) -> TensorResult<i32> {
+        if self.rank() != 1 {
+            return Err(TensorError::Rank);
+        }
+        Ok(Tensor {
+            shape: vec![(self.data.len() - window_size + 1) as i32],
+            data: self
+                .data
+                .windows(window_size)
+                .map(|w| w.into_iter().copied().reduce(binop).unwrap())
+                .collect(),
         })
     }
 
@@ -485,6 +508,14 @@ pub fn max_ice_cream(costs: Tensor<i32>, coins: Tensor<i32>) -> TensorResult<i32
         .scan(&Add::add, None)?
         .less_than_or_equal(coins)?
         .sum(None)
+}
+
+pub fn can_make_arithmetic_progression(arr: Tensor<i32>) -> TensorResult<i32> {
+    arr.sort()?
+        .windowed_reduce(2, &Sub::sub)?
+        .unique()?
+        .len()
+        .equal(build_scalar(1))
 }
 
 #[cfg(test)]
@@ -757,6 +788,21 @@ mod tests {
             let input = build_vector(vec![1, 6, 3, 1, 2, 5]);
             let expected = build_scalar(6);
             assert_eq!(max_ice_cream(input, build_scalar(20)).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_can_make_arithmetic_progression() {
+        // https://leetcode.com/problems/can-make-arithmetic-progression-from-sequence/
+        {
+            let input = build_vector(vec![3, 5, 1]);
+            let expected = build_scalar(1);
+            assert_eq!(can_make_arithmetic_progression(input).unwrap(), expected);
+        }
+        {
+            let input = build_vector(vec![1, 2, 4]);
+            let expected = build_scalar(0);
+            assert_eq!(can_make_arithmetic_progression(input).unwrap(), expected);
         }
     }
 }
