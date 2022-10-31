@@ -49,6 +49,7 @@ pub trait TensorOps {
 
 pub trait TensorIntOps {
     // Unary Functions
+    fn indices(self) -> TensorResult<i32>;
     fn iota(self) -> Tensor<i32>;
 
     // Unary Scalar Functions
@@ -209,6 +210,23 @@ impl<
 }
 
 impl TensorIntOps for Tensor<i32> {
+    fn indices(self) -> TensorResult<i32> {
+        if self.rank() != 1 {
+            return Err(TensorError::NotImplementedYet);
+        }
+        let new_data = self
+            .data
+            .into_iter()
+            .enumerate()
+            .filter(|(_, x)| *x == 1)
+            .map(|(i, _)| i as i32 + 1)
+            .collect::<Vec<_>>();
+        Ok(Tensor {
+            shape: vec![new_data.len() as i32],
+            data: new_data,
+        })
+    }
+
     fn iota(self) -> Tensor<i32> {
         if self.rank() == 0 {
             let n: i32 = self.data.first().unwrap() + 1;
@@ -518,6 +536,16 @@ pub fn can_make_arithmetic_progression(arr: Tensor<i32>) -> TensorResult<i32> {
         .equal(build_scalar(1))
 }
 
+pub fn first_uniq_num(nums: Tensor<i32>) -> TensorResult<i32> {
+    Ok(nums
+        .clone()
+        .outer_product(nums, &|a, b| (a == b).into())?
+        .sum(Some(2))?
+        .equal(build_scalar(1))?
+        .indices()?
+        .first())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -803,6 +831,16 @@ mod tests {
             let input = build_vector(vec![1, 2, 4]);
             let expected = build_scalar(0);
             assert_eq!(can_make_arithmetic_progression(input).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_first_unique_number_in_a_vector() {
+        // modified from https://leetcode.com/problems/first-unique-character-in-a-string/
+        {
+            let input = build_vector(vec![1, 2, 2, 3, 4, 5, 6, 2]);
+            let expected = build_scalar(1);
+            assert_eq!(first_uniq_num(input).unwrap(), expected);
         }
     }
 }
