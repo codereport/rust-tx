@@ -9,6 +9,7 @@ use std::ops::{Add, Mul, Sub};
 
 #[derive(Debug, PartialEq)]
 pub enum TensorError {
+    Domain,
     Rank,
     Shape,
     Type,
@@ -58,6 +59,7 @@ pub trait TensorIntOps {
     fn iota(self) -> Tensor<i32>;
 
     // Unary Scalar Functions
+    fn not(self) -> TensorResult<i32>;
     fn sign(self) -> TensorResult<i32>;
 
     // Binaray Functions
@@ -66,6 +68,7 @@ pub trait TensorIntOps {
     // Binary Scalar Functions
     fn min(self, other: Tensor<i32>) -> TensorResult<i32>;
     fn multiply(self, other: Tensor<i32>) -> TensorResult<i32>;
+    fn remainder(self, other: Tensor<i32>) -> TensorResult<i32>;
 
     // HOFs
     fn outer_product(
@@ -232,6 +235,16 @@ impl<
     }
 }
 
+fn domain_check(op: &dyn Fn(i32) -> i32) -> impl Fn(i32) -> Result<i32, TensorError> + '_ {
+    return |x: i32| {
+        if x < 0 || x > 1 {
+            Err(TensorError::Domain)
+        } else {
+            Ok(op(x))
+        }
+    };
+}
+
 impl TensorIntOps for Tensor<i32> {
     fn indices(self) -> TensorResult<i32> {
         if self.rank() != 1 {
@@ -272,6 +285,10 @@ impl TensorIntOps for Tensor<i32> {
 
     fn multiply(self, other: Tensor<i32>) -> TensorResult<i32> {
         self.scalar_binary_operation(other, &Mul::mul)
+    }
+
+    fn remainder(self, other: Tensor<i32>) -> TensorResult<i32> {
+        self.scalar_binary_operation(other, &i32::rem_euclid)
     }
 
     fn outer_product(
@@ -375,6 +392,17 @@ impl TensorIntOps for Tensor<i32> {
         }
     }
 
+    fn not(self) -> TensorResult<i32> {
+        Ok(Tensor {
+            shape: self.shape,
+            data: self
+                .data
+                .into_iter()
+                .map(domain_check(&|x| (x == 0).into()))
+                .collect::<Result<_, _>>()?,
+        })
+    }
+
     fn sign(self) -> TensorResult<i32> {
         Ok(Tensor {
             shape: self.shape,
@@ -383,20 +411,36 @@ impl TensorIntOps for Tensor<i32> {
     }
 
     fn base(self, base: i32) -> TensorResult<i32> {
-        if self.rank() != 0 {
+        if self.rank() > 1 {
             return Err(TensorError::NotImplementedYet);
         }
-        let val: i32 = *self.data.first().unwrap();
-        let n: usize = (val.clone().ilog(base) + 1).try_into().unwrap();
-        Ok(Tensor {
-            shape: vec![n as i32],
-            data: iter::repeat(base)
+        let base_k = |v: i32, b: i32, n: usize| {
+            iter::repeat(b)
                 .take(n)
-                .fold((vec![], val), |(v, t), x| {
+                .fold((vec![], v), |(v, t), x| {
                     ([vec![t.rem_euclid(x)], v].concat(), t.div_floor(x))
                 })
-                .0,
-        })
+                .0
+        };
+        if self.rank() == 0 {
+            let val: i32 = *self.data.first().unwrap();
+            let n: usize = (val.clone().ilog(base) + 1).try_into().unwrap();
+            return Ok(Tensor {
+                shape: vec![n as i32],
+                data: base_k(val, base, n),
+            });
+        } else {
+            let val: i32 = *self.clone().maximum(None)?.data.first().unwrap();
+            let n: usize = (val.clone().ilog(base) + 1).try_into().unwrap();
+            return Ok(Tensor {
+                shape: [self.shape, vec![n as i32]].concat(),
+                data: self
+                    .data
+                    .into_iter()
+                    .flat_map(|x| base_k(x, base, n))
+                    .collect(),
+            });
+        }
     }
 
     fn all(self, rank: Rank) -> TensorResult<i32> {
@@ -594,6 +638,15 @@ pub fn has_alternating_bits(n: Tensor<i32>) -> TensorResult<i32> {
 
 pub fn sum_digits_in_base_k(n: Tensor<i32>, k: i32) -> TensorResult<i32> {
     n.base(k)?.sum(None)
+}
+
+pub fn count_even_digit_sum(num: Tensor<i32>) -> TensorResult<i32> {
+    num.iota()
+        .base(10)?
+        .sum(Some(2))?
+        .remainder(build_scalar(2))?
+        .not()?
+        .sum(None)
 }
 
 #[cfg(test)]
@@ -954,6 +1007,21 @@ mod tests {
             let input = build_scalar(10);
             let expected = build_scalar(1);
             assert_eq!(sum_digits_in_base_k(input, 10).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_count_even_digit_sum() {
+        // https://leetcode.com/problems/count-integers-with-even-digit-sum/
+        {
+            let input = build_scalar(4);
+            let expected = build_scalar(2);
+            assert_eq!(count_even_digit_sum(input).unwrap(), expected);
+        }
+        {
+            let input = build_scalar(30);
+            let expected = build_scalar(14);
+            assert_eq!(count_even_digit_sum(input).unwrap(), expected);
         }
     }
 }
