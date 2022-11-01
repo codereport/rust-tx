@@ -392,9 +392,8 @@ impl TensorIntOps for Tensor<i32> {
             shape: vec![n as i32],
             data: iter::repeat(base)
                 .take(n)
-                .fold((vec![], val), |(mut v, temp), x| {
-                    v.insert(0, temp.rem_euclid(x));
-                    (v, temp.div_floor(x))
+                .fold((vec![], val), |(v, t), x| {
+                    ([vec![t.rem_euclid(x)], v].concat(), t.div_floor(x))
                 })
                 .0,
         })
