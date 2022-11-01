@@ -56,6 +56,7 @@ pub trait TensorIntOps {
     fn sign(self) -> TensorResult<i32>;
 
     // Binary Scalar Functions
+    fn min(self, other: Tensor<i32>) -> TensorResult<i32>;
     fn multiply(self, other: Tensor<i32>) -> TensorResult<i32>;
 
     // HOFs
@@ -74,6 +75,7 @@ pub trait TensorIntOps {
     ) -> TensorResult<i32>;
 
     // Reduce Specializations
+    fn any(self, rank: Rank) -> TensorResult<i32>;
     fn maximum(self, rank: Rank) -> TensorResult<i32>;
     fn minimum(self, rank: Rank) -> TensorResult<i32>;
     fn product(self, rank: Rank) -> TensorResult<i32>;
@@ -243,12 +245,12 @@ impl TensorIntOps for Tensor<i32> {
         build_scalar(-1)
     }
 
-    fn multiply(self, other: Tensor<i32>) -> TensorResult<i32> {
-        self.scalar_binary_operation(other, &Mul::mul)
+    fn min(self, other: Tensor<i32>) -> TensorResult<i32> {
+        self.scalar_binary_operation(other, &std::cmp::min)
     }
 
-    fn product(self, rank: Rank) -> TensorResult<i32> {
-        self.reduce(&Mul::mul, rank)
+    fn multiply(self, other: Tensor<i32>) -> TensorResult<i32> {
+        self.scalar_binary_operation(other, &Mul::mul)
     }
 
     fn outer_product(
@@ -377,8 +379,12 @@ impl TensorIntOps for Tensor<i32> {
         })
     }
 
-    fn sum(self, rank: Rank) -> TensorResult<i32> {
-        self.reduce(&Add::add, rank)
+    fn any(self, rank: Rank) -> TensorResult<i32> {
+        self.reduce(&std::cmp::max, rank)?.min(build_scalar(1))
+    }
+
+    fn product(self, rank: Rank) -> TensorResult<i32> {
+        self.reduce(&Mul::mul, rank)
     }
 
     fn maximum(self, rank: Rank) -> TensorResult<i32> {
@@ -387,6 +393,10 @@ impl TensorIntOps for Tensor<i32> {
 
     fn minimum(self, rank: Rank) -> TensorResult<i32> {
         self.reduce(&std::cmp::min, rank)
+    }
+
+    fn sum(self, rank: Rank) -> TensorResult<i32> {
+        self.reduce(&Add::add, rank)
     }
 }
 
@@ -544,6 +554,10 @@ pub fn first_uniq_num(nums: Tensor<i32>) -> TensorResult<i32> {
         .equal(build_scalar(1))?
         .indices()?
         .first())
+}
+
+pub fn check_if_double_exists(arr: Tensor<i32>) -> TensorResult<i32> {
+    arr.triangle_product(&|a, b| (a == 2 * b).into())?.any(None)
 }
 
 #[cfg(test)]
@@ -841,6 +855,21 @@ mod tests {
             let input = build_vector(vec![1, 2, 2, 3, 4, 5, 6, 2]);
             let expected = build_scalar(1);
             assert_eq!(first_uniq_num(input).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_check_if_double_exists() {
+        // https://leetcode.com/problems/check-if-n-and-its-double-exist/
+        {
+            let input = build_vector(vec![10, 2, 5, 3]);
+            let expected = build_scalar(1);
+            assert_eq!(check_if_double_exists(input).unwrap(), expected);
+        }
+        {
+            let input = build_vector(vec![3, 1, 7, 11]);
+            let expected = build_scalar(0);
+            assert_eq!(check_if_double_exists(input).unwrap(), expected);
         }
     }
 }
