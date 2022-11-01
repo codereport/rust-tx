@@ -945,6 +945,7 @@ mod tests {
 
     #[test]
     fn test_sum_digits_in_base_k() {
+        // https://leetcode.com/problems/sum-of-digits-in-base-k/
         {
             let input = build_scalar(34);
             let expected = build_scalar(9);
