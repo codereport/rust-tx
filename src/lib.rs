@@ -1,6 +1,10 @@
+#![feature(int_roundings)]
+#![feature(int_log)]
+
 use itertools::Itertools;
 use std::collections::HashSet;
 use std::convert::TryInto;
+use std::iter;
 use std::ops::{Add, Mul, Sub};
 
 #[derive(Debug, PartialEq)]
@@ -56,6 +60,9 @@ pub trait TensorIntOps {
     // Unary Scalar Functions
     fn sign(self) -> TensorResult<i32>;
 
+    // Binaray Functions
+    fn base(self, base: i32) -> TensorResult<i32>;
+
     // Binary Scalar Functions
     fn min(self, other: Tensor<i32>) -> TensorResult<i32>;
     fn multiply(self, other: Tensor<i32>) -> TensorResult<i32>;
@@ -71,6 +78,7 @@ pub trait TensorIntOps {
     fn triangle_product(self, binop: &dyn Fn(i32, i32) -> i32) -> TensorResult<i32>;
 
     // Reduce Specializations
+    fn all(self, rank: Rank) -> TensorResult<i32>;
     fn any(self, rank: Rank) -> TensorResult<i32>;
     fn maximum(self, rank: Rank) -> TensorResult<i32>;
     fn minimum(self, rank: Rank) -> TensorResult<i32>;
@@ -374,6 +382,28 @@ impl TensorIntOps for Tensor<i32> {
         })
     }
 
+    fn base(self, base: i32) -> TensorResult<i32> {
+        if self.rank() != 0 {
+            return Err(TensorError::NotImplementedYet);
+        }
+        let val: i32 = *self.data.first().unwrap();
+        let n: usize = (val.clone().ilog(base) + 1).try_into().unwrap();
+        Ok(Tensor {
+            shape: vec![n as i32],
+            data: iter::repeat(base)
+                .take(n)
+                .fold((vec![], val), |(mut v, temp), x| {
+                    v.insert(0, temp.rem_euclid(x));
+                    (v, temp.div_floor(x))
+                })
+                .0,
+        })
+    }
+
+    fn all(self, rank: Rank) -> TensorResult<i32> {
+        self.reduce(&std::cmp::min, rank)?.min(build_scalar(1))
+    }
+
     fn any(self, rank: Rank) -> TensorResult<i32> {
         self.reduce(&std::cmp::max, rank)?.min(build_scalar(1))
     }
@@ -556,6 +586,13 @@ pub fn check_if_double_exists(arr: Tensor<i32>) -> TensorResult<i32> {
     arr.triangle_product(&|a, b| (a == 2 * b).into())?.any(None)
 }
 
+pub fn has_alternating_bits(n: Tensor<i32>) -> TensorResult<i32> {
+    n.base(2)?
+        .slide(2)?
+        .reduce(&|a, b| (a != b).into(), Some(2))?
+        .all(None)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -713,6 +750,19 @@ mod tests {
     }
 
     #[test]
+    fn test_base() {
+        assert_eq!(
+            build_scalar(4).base(2).unwrap(),
+            build_vector(vec![1, 0, 0])
+        );
+
+        assert_eq!(
+            build_scalar(123).base(10).unwrap(),
+            build_vector(vec![1, 2, 3])
+        );
+    }
+
+    #[test]
     fn test_stringless_max_paren_depth() {
         let input = build_vector(vec![2, 2, 4, 5, 3, 2, 2, 3, 3, 8, 3, 3]);
         let expected = build_scalar(3);
@@ -866,6 +916,26 @@ mod tests {
             let input = build_vector(vec![3, 1, 7, 11]);
             let expected = build_scalar(0);
             assert_eq!(check_if_double_exists(input).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_has_alternating_bits() {
+        // https://leetcode.com/problems/binary-number-with-alternating-bits/
+        {
+            let input = build_scalar(5);
+            let expected = build_scalar(1);
+            assert_eq!(has_alternating_bits(input).unwrap(), expected);
+        }
+        {
+            let input = build_scalar(7);
+            let expected = build_scalar(0);
+            assert_eq!(has_alternating_bits(input).unwrap(), expected);
+        }
+        {
+            let input = build_scalar(11);
+            let expected = build_scalar(0);
+            assert_eq!(has_alternating_bits(input).unwrap(), expected);
         }
     }
 }
