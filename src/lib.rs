@@ -593,6 +593,10 @@ pub fn has_alternating_bits(n: Tensor<i32>) -> TensorResult<i32> {
         .all(None)
 }
 
+pub fn sum_digits_in_base_k(n: Tensor<i32>, k: i32) -> TensorResult<i32> {
+    n.base(k)?.sum(None)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -936,6 +940,20 @@ mod tests {
             let input = build_scalar(11);
             let expected = build_scalar(0);
             assert_eq!(has_alternating_bits(input).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_sum_digits_in_base_k() {
+        {
+            let input = build_scalar(34);
+            let expected = build_scalar(9);
+            assert_eq!(sum_digits_in_base_k(input, 6).unwrap(), expected);
+        }
+        {
+            let input = build_scalar(10);
+            let expected = build_scalar(1);
+            assert_eq!(sum_digits_in_base_k(input, 10).unwrap(), expected);
         }
     }
 }
