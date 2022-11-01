@@ -33,6 +33,7 @@ pub trait TensorOps {
     fn intersection(self, other: Tensor<Self::Item>) -> TensorResult<Self::Item>;
     fn reshape(self, shape: Vec<i32>) -> Tensor<Self::Item>;
     fn reverse(self, rank: Rank) -> TensorResult<Self::Item>;
+    fn slide(self, window_size: usize) -> TensorResult<Self::Item>;
     fn sort(self) -> TensorResult<Self::Item>;
     fn unique(self) -> TensorResult<Self::Item>;
 
@@ -68,11 +69,6 @@ pub trait TensorIntOps {
     fn reduce(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32>;
     fn scan(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32>;
     fn triangle_product(self, binop: &dyn Fn(i32, i32) -> i32) -> TensorResult<i32>;
-    fn windowed_reduce(
-        self,
-        window_size: usize,
-        binop: &dyn Fn(i32, i32) -> i32,
-    ) -> TensorResult<i32>;
 
     // Reduce Specializations
     fn any(self, rank: Rank) -> TensorResult<i32>;
@@ -189,6 +185,23 @@ impl<
         }
     }
 
+    fn slide(self, window_size: usize) -> TensorResult<T> {
+        if self.rank() != 1 {
+            return Err(TensorError::Rank);
+        }
+        Ok(Tensor {
+            shape: vec![
+                (self.data.len() - window_size + 1) as i32,
+                window_size as i32,
+            ],
+            data: self
+                .data
+                .windows(window_size)
+                .flat_map(|x| x.into_iter().copied())
+                .collect::<Vec<_>>(),
+        })
+    }
+
     fn sort(self) -> TensorResult<T> {
         if self.rank() > 1 {
             return Err(TensorError::NotImplementedYet);
@@ -292,24 +305,6 @@ impl TensorIntOps for Tensor<i32> {
                         .map(move |(j, y)| if j > i { binop(x, *y) } else { 0 })
                 })
                 .collect::<Vec<_>>(),
-        })
-    }
-
-    fn windowed_reduce(
-        self,
-        window_size: usize,
-        binop: &dyn Fn(i32, i32) -> i32,
-    ) -> TensorResult<i32> {
-        if self.rank() != 1 {
-            return Err(TensorError::Rank);
-        }
-        Ok(Tensor {
-            shape: vec![(self.data.len() - window_size + 1) as i32],
-            data: self
-                .data
-                .windows(window_size)
-                .map(|w| w.into_iter().copied().reduce(binop).unwrap())
-                .collect(),
         })
     }
 
@@ -540,7 +535,8 @@ pub fn max_ice_cream(costs: Tensor<i32>, coins: Tensor<i32>) -> TensorResult<i32
 
 pub fn can_make_arithmetic_progression(arr: Tensor<i32>) -> TensorResult<i32> {
     arr.sort()?
-        .windowed_reduce(2, &Sub::sub)?
+        .slide(2)?
+        .reduce(&Sub::sub, Some(2))?
         .unique()?
         .len()
         .equal(build_scalar(1))
