@@ -27,6 +27,7 @@ pub struct Tensor<T> {
 type TensorResult<T> = Result<Tensor<T>, TensorError>;
 
 pub trait TensorFns {
+    fn is_empty(&self) -> Tensor<i32>;
     fn len(&self) -> Tensor<i32>;
     fn rank(&self) -> i32;
 }
@@ -90,6 +91,13 @@ pub trait TensorIntOps {
 }
 
 impl<T> TensorFns for Tensor<T> {
+    fn is_empty(&self) -> Tensor<i32> {
+        Tensor {
+            shape: vec![],
+            data: vec![self.data.is_empty().into()],
+        }
+    }
+
     fn len(&self) -> Tensor<i32> {
         Tensor {
             shape: vec![],
@@ -826,6 +834,13 @@ mod tests {
         );
 
         assert_eq!(build_vector(vec![1, 2, 3]).not(), Err(TensorError::Domain));
+    }
+
+    #[test]
+    fn test_len_is_empty() {
+        assert_eq!(build_vector(vec![1, 2, 3]).len(), build_scalar(3));
+        assert_eq!(build_vector(vec![1, 2, 3]).is_empty(), build_scalar(0));
+        assert_eq!(build_vector::<Vec<i32>>(vec![]).is_empty(), build_scalar(1));
     }
 
     #[test]
