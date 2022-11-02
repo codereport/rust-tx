@@ -819,6 +819,16 @@ mod tests {
     }
 
     #[test]
+    fn test_not() {
+        assert_eq!(
+            build_vector(vec![1, 0, 1]).not().unwrap(),
+            build_vector(vec![0, 1, 0])
+        );
+
+        assert_eq!(build_vector(vec![1, 2, 3]).not(), Err(TensorError::Domain));
+    }
+
+    #[test]
     fn test_stringless_max_paren_depth() {
         let input = build_vector(vec![2, 2, 4, 5, 3, 2, 2, 3, 3, 8, 3, 3]);
         let expected = build_scalar(3);
