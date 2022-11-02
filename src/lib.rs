@@ -179,7 +179,7 @@ impl<
     }
 
     fn reshape(self, shape: Vec<i32>) -> Tensor<T> {
-        let n: i32 = shape.clone().iter().product();
+        let n: i32 = shape.iter().product();
         Tensor {
             shape,
             data: self.data.into_iter().take(n as usize).collect(),
@@ -208,7 +208,7 @@ impl<
             data: self
                 .data
                 .windows(window_size)
-                .flat_map(|x| x.into_iter().copied())
+                .flat_map(|x| x.iter().copied())
                 .collect::<Vec<_>>(),
         })
     }
@@ -236,13 +236,13 @@ impl<
 }
 
 fn domain_check(op: &dyn Fn(i32) -> i32) -> impl Fn(i32) -> Result<i32, TensorError> + '_ {
-    return |x: i32| {
-        if x < 0 || x > 1 {
+    |x: i32| {
+        if !(0..=1).contains(&x) {
             Err(TensorError::Domain)
         } else {
             Ok(op(x))
         }
-    };
+    }
 }
 
 impl TensorIntOps for Tensor<i32> {
@@ -424,22 +424,22 @@ impl TensorIntOps for Tensor<i32> {
         };
         if self.rank() == 0 {
             let val: i32 = *self.data.first().unwrap();
-            let n: usize = (val.clone().ilog(base) + 1).try_into().unwrap();
-            return Ok(Tensor {
+            let n: usize = (val.ilog(base) + 1).try_into().unwrap();
+            Ok(Tensor {
                 shape: vec![n as i32],
                 data: base_k(val, base, n),
-            });
+            })
         } else {
             let val: i32 = *self.clone().maximum(None)?.data.first().unwrap();
-            let n: usize = (val.clone().ilog(base) + 1).try_into().unwrap();
-            return Ok(Tensor {
+            let n: usize = (val.ilog(base) + 1).try_into().unwrap();
+            Ok(Tensor {
                 shape: [self.shape, vec![n as i32]].concat(),
                 data: self
                     .data
                     .into_iter()
                     .flat_map(|x| base_k(x, base, n))
                     .collect(),
-            });
+            })
         }
     }
 
