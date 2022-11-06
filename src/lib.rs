@@ -1,6 +1,5 @@
 #![feature(int_roundings)]
 #![feature(int_log)]
-#![feature(iter_partition_in_place)]
 
 use itertools::Itertools;
 use std::collections::HashSet;
@@ -39,7 +38,7 @@ pub trait TensorOps {
     fn first(self) -> Tensor<Self::Item>;
     fn intersection(self, other: Tensor<Self::Item>) -> TensorResult<Self::Item>;
     fn join(self, other: Tensor<Self::Item>) -> TensorResult<Self::Item>;
-    // fn partition(self, pred: &dyn Fn(Self::Item) -> bool, rank: Rank) -> TensorResult<Self::Item>;
+    fn partition(self, pred: &dyn Fn(&Self::Item) -> bool) -> TensorResult<Self::Item>;
     fn reshape(self, shape: Vec<i32>) -> Tensor<Self::Item>;
     fn reverse(self, rank: Rank) -> TensorResult<Self::Item>;
     fn rotate(self, other: Tensor<i32>, rank: Rank) -> TensorResult<Self::Item>;
@@ -205,19 +204,16 @@ impl<
         })
     }
 
-    // TODO: complete
-    // fn partition(self, pred: &dyn Fn(Self::Item) -> bool, rank: Rank) -> TensorResult<Self::Item> {
-    //     if self.rank() != 1 {
-    //         return Err(TensorError::NotImplementedYet);
-    //     }
-    //     // let (front, back) = self.data.into_iter().partition(pred);
-    //     let mut new_data = self.data;
-    //     new_data.iter_mut().partition_in_place(pred);
-    //     Ok(Tensor {
-    //         shape: self.shape,
-    //         data: self.data,
-    //     })
-    // }
+    fn partition(self, pred: &dyn Fn(&Self::Item) -> bool) -> TensorResult<Self::Item> {
+        if self.rank() != 1 {
+            return Err(TensorError::NotImplementedYet);
+        }
+        let (front, back): (Vec<_>, Vec<_>) = self.data.into_iter().partition(pred);
+        Ok(Tensor {
+            shape: self.shape,
+            data: front.into_iter().chain(back.into_iter()).collect(),
+        })
+    }
 
     fn reshape(self, shape: Vec<i32>) -> Tensor<T> {
         let n: i32 = shape.iter().product();
@@ -729,7 +725,8 @@ pub fn apply_array_operations(nums: Tensor<i32>) -> TensorResult<i32> {
         .not()?
         .multiply(mask)?
         .join(build_scalar(1))?
-        .multiply(nums)
+        .multiply(nums)?
+        .partition(&|x| *x != 0)
 }
 
 #[cfg(test)]
