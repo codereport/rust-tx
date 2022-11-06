@@ -1,5 +1,6 @@
 #![feature(int_roundings)]
 #![feature(int_log)]
+#![feature(iter_partition_in_place)]
 
 use itertools::Itertools;
 use std::collections::HashSet;
@@ -37,8 +38,11 @@ pub trait TensorOps {
 
     fn first(self) -> Tensor<Self::Item>;
     fn intersection(self, other: Tensor<Self::Item>) -> TensorResult<Self::Item>;
+    fn join(self, other: Tensor<Self::Item>) -> TensorResult<Self::Item>;
+    // fn partition(self, pred: &dyn Fn(Self::Item) -> bool, rank: Rank) -> TensorResult<Self::Item>;
     fn reshape(self, shape: Vec<i32>) -> Tensor<Self::Item>;
     fn reverse(self, rank: Rank) -> TensorResult<Self::Item>;
+    fn rotate(self, other: Tensor<i32>, rank: Rank) -> TensorResult<Self::Item>;
     fn slide(self, window_size: usize) -> TensorResult<Self::Item>;
     fn sort(self) -> TensorResult<Self::Item>;
     fn unique(self) -> TensorResult<Self::Item>;
@@ -69,6 +73,7 @@ pub trait TensorIntOps {
     // Binary Scalar Functions
     fn min(self, other: Tensor<i32>) -> TensorResult<i32>;
     fn multiply(self, other: Tensor<i32>) -> TensorResult<i32>;
+    fn plus(self, other: Tensor<i32>) -> TensorResult<i32>;
     fn remainder(self, other: Tensor<i32>) -> TensorResult<i32>;
 
     // HOFs
@@ -186,6 +191,34 @@ impl<
         self.scalar_binary_operation(other, &|a, b| (a <= b).into())
     }
 
+    fn join(self, other: Tensor<T>) -> TensorResult<T> {
+        if self.rank() > 1 || other.rank() > 1 {
+            return Err(TensorError::NotImplementedYet);
+        }
+        Ok(Tensor {
+            shape: vec![(self.data.len() + other.data.len()).try_into().unwrap()],
+            data: self
+                .data
+                .into_iter()
+                .chain(other.data.into_iter())
+                .collect(),
+        })
+    }
+
+    // TODO: complete
+    // fn partition(self, pred: &dyn Fn(Self::Item) -> bool, rank: Rank) -> TensorResult<Self::Item> {
+    //     if self.rank() != 1 {
+    //         return Err(TensorError::NotImplementedYet);
+    //     }
+    //     // let (front, back) = self.data.into_iter().partition(pred);
+    //     let mut new_data = self.data;
+    //     new_data.iter_mut().partition_in_place(pred);
+    //     Ok(Tensor {
+    //         shape: self.shape,
+    //         data: self.data,
+    //     })
+    // }
+
     fn reshape(self, shape: Vec<i32>) -> Tensor<T> {
         let n: i32 = shape.iter().product();
         Tensor {
@@ -200,6 +233,29 @@ impl<
             None => Ok(Tensor {
                 shape: self.shape,
                 data: self.data.into_iter().rev().collect(),
+            }),
+        }
+    }
+
+    fn rotate(self, other: Tensor<i32>, rank: Rank) -> TensorResult<T> {
+        if other.rank() > 0 {
+            return Err(TensorError::Rank);
+        }
+        let n: i32 = *other.data.first().unwrap();
+        let l: i32 = self.data.len().try_into().unwrap();
+        let nonneg_n: usize = (if n < 0 { l + n } else { n }).try_into().unwrap();
+        match rank {
+            Some(_) => Err(TensorError::NotImplementedYet),
+            None => Ok(Tensor {
+                shape: self.shape,
+                data: self
+                    .data
+                    .clone()
+                    .into_iter()
+                    .cycle()
+                    .skip(nonneg_n)
+                    .take(self.data.len())
+                    .collect(),
             }),
         }
     }
@@ -293,6 +349,10 @@ impl TensorIntOps for Tensor<i32> {
 
     fn multiply(self, other: Tensor<i32>) -> TensorResult<i32> {
         self.scalar_binary_operation(other, &Mul::mul)
+    }
+
+    fn plus(self, other: Tensor<i32>) -> TensorResult<i32> {
+        self.scalar_binary_operation(other, &Add::add)
     }
 
     fn remainder(self, other: Tensor<i32>) -> TensorResult<i32> {
@@ -655,6 +715,21 @@ pub fn count_even_digit_sum(num: Tensor<i32>) -> TensorResult<i32> {
         .remainder(build_scalar(2))?
         .not()?
         .sum(None)
+}
+
+pub fn apply_array_operations(nums: Tensor<i32>) -> TensorResult<i32> {
+    let mask = nums
+        .clone()
+        .slide(2)?
+        .reduce(&|a, b| (a == b).into(), Some(2))?
+        .plus(build_scalar(1))?;
+    mask.clone()
+        .rotate(build_scalar(-1), None)?
+        .equal(build_scalar(2))?
+        .not()?
+        .multiply(mask)?
+        .join(build_scalar(1))?
+        .multiply(nums)
 }
 
 #[cfg(test)]
@@ -1047,6 +1122,21 @@ mod tests {
             let input = build_scalar(30);
             let expected = build_scalar(14);
             assert_eq!(count_even_digit_sum(input).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_apply_array_operations() {
+        // https://leetcode.com/problems/apply-operations-to-an-array/
+        {
+            let input = build_vector(vec![1, 2, 2, 1, 1, 0]);
+            let expected = build_vector(vec![1, 4, 2, 0, 0, 0]);
+            assert_eq!(apply_array_operations(input).unwrap(), expected);
+        }
+        {
+            let input = build_vector(vec![0, 1]);
+            let expected = build_vector(vec![1, 0]);
+            assert_eq!(apply_array_operations(input).unwrap(), expected);
         }
     }
 }
