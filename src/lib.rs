@@ -539,6 +539,10 @@ pub fn build_scalar(data: i32) -> Tensor<i32> {
     }
 }
 
+pub fn build_vector_from_string(str: String) -> Tensor<char> {
+    build_vector(str.chars().collect::<Vec<_>>())
+}
+
 pub fn build_vector<T>(data: Vec<T>) -> Tensor<T> {
     Tensor {
         shape: vec![data.len() as i32],
@@ -727,6 +731,10 @@ pub fn apply_array_operations(nums: Tensor<i32>) -> TensorResult<i32> {
         .join(build_scalar(1))?
         .multiply(nums)?
         .partition(&|x| *x != 0)
+}
+
+pub fn check_if_pangram(sentence: Tensor<char>) -> TensorResult<i32> {
+    sentence.unique()?.len().equal(build_scalar(26))
 }
 
 #[cfg(test)]
@@ -1134,6 +1142,20 @@ mod tests {
             let input = build_vector(vec![0, 1]);
             let expected = build_vector(vec![1, 0]);
             assert_eq!(apply_array_operations(input).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_check_if_pangram() {
+        {
+            let input = build_vector_from_string("thequickbrownfoxjumpsoverthelazydog".to_string());
+            let expected = build_scalar(1);
+            assert_eq!(check_if_pangram(input).unwrap(), expected);
+        }
+        {
+            let input = build_vector_from_string("leetcode".to_string());
+            let expected = build_scalar(0);
+            assert_eq!(check_if_pangram(input).unwrap(), expected);
         }
     }
 }
