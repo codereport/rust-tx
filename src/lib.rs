@@ -347,7 +347,7 @@ impl TensorIntOps for Tensor<i32> {
                     .cartesian_product((1..=cols).into_iter())
                     .zip(self.data.into_iter())
                     .filter(|(_, x)| *x == 1)
-                    .flat_map(|(i, _)| once(i.0).chain(once(i.1)).collect::<Vec<_>>())
+                    .flat_map(|(i, _)| once(i.0).chain(once(i.1)))
                     .collect::<Vec<_>>();
                 Ok(Tensor {
                     shape: vec![new_data.len() as i32 / 2, 2],
@@ -1209,4 +1209,12 @@ mod tests {
             );
         }
     }
+
+    // Leetcode Problems TODO:
+    // https://leetcode.com/problems/three-consecutive-odds/
+    // tco ← {3≤⌈/≢¨⊆⍨2|⍵}  ⍝ shorter solution
+    // https://leetcode.com/problems/maximum-ascending-subarray-sum/
+    // maxAscendingSum ← ⌈/(+/¨((1,2>/⊢)⊂⊢))
+    // https://leetcode.com/problems/redistribute-characters-to-make-all-strings-equal/
+    // makeEqual s = all (==0) . map (\x -> mod x (length s)) . map snd . count $ concat s
 }
