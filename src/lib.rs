@@ -458,8 +458,7 @@ impl TensorIntOps for Tensor<i32> {
                 let first = self.data.iter().copied().next().unwrap();
                 Ok(Tensor {
                     shape: self.shape,
-                    data: Some(first)
-                        .into_iter()
+                    data: once(first)
                         .chain(self.data.into_iter().skip(1).scan(first, |acc, x| {
                             *acc = binop(*acc, x);
                             Some(*acc)
