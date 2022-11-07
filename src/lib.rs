@@ -5,6 +5,7 @@ use itertools::Itertools;
 use std::collections::HashSet;
 use std::convert::TryInto;
 use std::iter;
+use std::iter::once;
 use std::ops::{Add, Mul, Sub};
 
 #[derive(Debug, PartialEq)]
@@ -55,6 +56,13 @@ pub trait TensorOps {
     fn equal(self, other: Tensor<Self::Item>) -> TensorResult<i32>;
     fn less_than(self, other: Tensor<Self::Item>) -> TensorResult<i32>;
     fn less_than_or_equal(self, other: Tensor<Self::Item>) -> TensorResult<i32>;
+
+    // HOFs
+    fn outer_product(
+        self,
+        other: Tensor<Self::Item>,
+        binop: &dyn Fn(Self::Item, Self::Item) -> i32,
+    ) -> TensorResult<i32>;
 }
 
 pub trait TensorIntOps {
@@ -76,11 +84,6 @@ pub trait TensorIntOps {
     fn remainder(self, other: Tensor<i32>) -> TensorResult<i32>;
 
     // HOFs
-    fn outer_product(
-        self,
-        other: Tensor<i32>,
-        binop: &dyn Fn(i32, i32) -> i32,
-    ) -> TensorResult<i32>;
     fn reduce(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32>;
     fn scan(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32>;
     fn triangle_product(self, binop: &dyn Fn(i32, i32) -> i32) -> TensorResult<i32>;
@@ -204,6 +207,22 @@ impl<
         })
     }
 
+    fn outer_product(self, other: Tensor<T>, binop: &dyn Fn(T, T) -> i32) -> TensorResult<i32> {
+        if self.rank() > 1 || other.rank() > 1 {
+            return Err(TensorError::Rank);
+        }
+        let rows = self.shape.first().unwrap();
+        let cols = other.shape.first().unwrap();
+        Ok(Tensor {
+            shape: vec![*rows, *cols],
+            data: self
+                .data
+                .into_iter()
+                .flat_map(|x| other.data.iter().map(move |y| binop(x, *y)))
+                .collect::<Vec<_>>(),
+        })
+    }
+
     fn partition(self, pred: &dyn Fn(&Self::Item) -> bool) -> TensorResult<Self::Item> {
         if self.rank() != 1 {
             return Err(TensorError::NotImplementedYet);
@@ -307,20 +326,36 @@ fn domain_check(op: &dyn Fn(i32) -> i32) -> impl Fn(i32) -> Result<i32, TensorEr
 
 impl TensorIntOps for Tensor<i32> {
     fn indices(self) -> TensorResult<i32> {
-        if self.rank() != 1 {
-            return Err(TensorError::NotImplementedYet);
+        match self.rank() {
+            1 => {
+                let new_data = self
+                    .data
+                    .into_iter()
+                    .enumerate()
+                    .filter(|(_, x)| *x == 1)
+                    .map(|(i, _)| i as i32 + 1)
+                    .collect::<Vec<_>>();
+                Ok(Tensor {
+                    shape: vec![new_data.len() as i32],
+                    data: new_data,
+                })
+            }
+            2 => {
+                let [rows, cols] = self.shape[..] else { todo!() };
+                let new_data = (1..=rows)
+                    .into_iter()
+                    .cartesian_product((1..=cols).into_iter())
+                    .zip(self.data.into_iter())
+                    .filter(|(_, x)| *x == 1)
+                    .flat_map(|(i, _)| once(i.0).chain(once(i.1)).collect::<Vec<_>>())
+                    .collect::<Vec<_>>();
+                Ok(Tensor {
+                    shape: vec![new_data.len() as i32 / 2, 2],
+                    data: new_data,
+                })
+            }
+            _ => Err(TensorError::NotImplementedYet),
         }
-        let new_data = self
-            .data
-            .into_iter()
-            .enumerate()
-            .filter(|(_, x)| *x == 1)
-            .map(|(i, _)| i as i32 + 1)
-            .collect::<Vec<_>>();
-        Ok(Tensor {
-            shape: vec![new_data.len() as i32],
-            data: new_data,
-        })
     }
 
     fn iota(self) -> Tensor<i32> {
@@ -353,26 +388,6 @@ impl TensorIntOps for Tensor<i32> {
 
     fn remainder(self, other: Tensor<i32>) -> TensorResult<i32> {
         self.scalar_binary_operation(other, &i32::rem_euclid)
-    }
-
-    fn outer_product(
-        self,
-        other: Tensor<i32>,
-        binop: &dyn Fn(i32, i32) -> i32,
-    ) -> TensorResult<i32> {
-        if self.rank() > 1 || other.rank() > 1 {
-            return Err(TensorError::Rank);
-        }
-        let rows = self.shape.first().unwrap();
-        let cols = other.shape.first().unwrap();
-        Ok(Tensor {
-            shape: vec![*rows, *cols],
-            data: self
-                .data
-                .into_iter()
-                .flat_map(|x| other.data.iter().map(move |y| binop(x, *y)))
-                .collect::<Vec<_>>(),
-        })
     }
 
     fn triangle_product(self, binop: &dyn Fn(i32, i32) -> i32) -> TensorResult<i32> {
@@ -735,6 +750,15 @@ pub fn apply_array_operations(nums: Tensor<i32>) -> TensorResult<i32> {
 
 pub fn check_if_pangram(sentence: Tensor<char>) -> TensorResult<i32> {
     sentence.unique()?.len().equal(build_scalar(26))
+}
+
+pub fn max_length_between_equal_characters(s: Tensor<char>) -> TensorResult<i32> {
+    s.clone()
+        .outer_product(s, &|a, b| (a == b).into())?
+        .indices()?
+        .reduce(&Sub::sub, Some(2))?
+        .maximum(None)?
+        .plus(build_scalar(-1))
 }
 
 #[cfg(test)]
@@ -1156,6 +1180,34 @@ mod tests {
             let input = build_vector_from_string("leetcode".to_string());
             let expected = build_scalar(0);
             assert_eq!(check_if_pangram(input).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_max_length_between_equal_characters() {
+        {
+            let input = build_vector_from_string("aa".to_string());
+            let expected = build_scalar(0);
+            assert_eq!(
+                max_length_between_equal_characters(input).unwrap(),
+                expected
+            );
+        }
+        {
+            let input = build_vector_from_string("abca".to_string());
+            let expected = build_scalar(2);
+            assert_eq!(
+                max_length_between_equal_characters(input).unwrap(),
+                expected
+            );
+        }
+        {
+            let input = build_vector_from_string("cbzxy".to_string());
+            let expected = build_scalar(-1);
+            assert_eq!(
+                max_length_between_equal_characters(input).unwrap(),
+                expected
+            );
         }
     }
 }
