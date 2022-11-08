@@ -373,7 +373,7 @@ impl TensorIntOps for Tensor<i32> {
                     .cartesian_product((1..=cols).into_iter())
                     .zip(self.data.into_iter())
                     .filter(|(_, x)| *x == 1)
-                    .flat_map(|(i, _)| [i.0, i.1].into_iter())
+                    .flat_map(|(i, _)| [i.0, i.1])
                     .collect::<Vec<_>>();
                 Ok(Tensor {
                     shape: vec![new_data.len() as i32 / 2, 2],
