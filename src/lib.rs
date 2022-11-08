@@ -199,7 +199,7 @@ impl<
                 data: self
                     .data
                     .into_iter()
-                    .zip(other.data.into_iter())
+                    .zip(other.data)
                     .map(|(a, b)| binop(a, b))
                     .collect(),
             });
@@ -225,11 +225,7 @@ impl<
         }
         Ok(Tensor {
             shape: vec![(self.data.len() + other.data.len()).try_into().unwrap()],
-            data: self
-                .data
-                .into_iter()
-                .chain(other.data.into_iter())
-                .collect(),
+            data: self.data.into_iter().chain(other.data).collect(),
         })
     }
 
@@ -256,7 +252,7 @@ impl<
         let (front, back): (Vec<_>, Vec<_>) = self.data.into_iter().partition(pred);
         Ok(Tensor {
             shape: self.shape,
-            data: front.into_iter().chain(back.into_iter()).collect(),
+            data: front.into_iter().chain(back).collect(),
         })
     }
 
@@ -370,8 +366,8 @@ impl TensorIntOps for Tensor<i32> {
                 let [rows, cols] = self.shape[..] else { todo!() };
                 let new_data = (1..=rows)
                     .into_iter()
-                    .cartesian_product((1..=cols).into_iter())
-                    .zip(self.data.into_iter())
+                    .cartesian_product(1..=cols)
+                    .zip(self.data)
                     .filter(|(_, x)| *x == 1)
                     .flat_map(|(i, _)| [i.0, i.1])
                     .collect::<Vec<_>>();
@@ -454,10 +450,7 @@ impl TensorIntOps for Tensor<i32> {
                         .data
                         .chunks(chunk_size)
                         .fold(vec![0; chunk_size], |acc, chunk| {
-                            acc.iter()
-                                .zip(chunk.iter())
-                                .map(|(a, b)| binop(*a, *b))
-                                .collect()
+                            acc.iter().zip(chunk).map(|(a, b)| binop(*a, *b)).collect()
                         }),
                 })
             }
