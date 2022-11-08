@@ -6,7 +6,10 @@ use std::collections::HashSet;
 use std::convert::TryInto;
 use std::iter;
 use std::iter::once;
-use std::ops::{Add, Mul, Sub};
+#[cfg(test)]
+use std::ops::Sub;
+use std::ops::{Add, Mul};
+use std::process::{ExitCode, Termination};
 
 #[derive(Debug, PartialEq)]
 pub enum TensorError {
@@ -17,7 +20,7 @@ pub enum TensorError {
     NotImplementedYet,
 }
 
-type Rank = Option<i32>;
+pub type Rank = Option<i32>;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Tensor<T> {
@@ -25,7 +28,13 @@ pub struct Tensor<T> {
     data: Vec<T>,
 }
 
-type TensorResult<T> = Result<Tensor<T>, TensorError>;
+pub type TensorResult<T> = Result<Tensor<T>, TensorError>;
+
+impl<T> Termination for Tensor<T> {
+    fn report(self) -> ExitCode {
+        ExitCode::SUCCESS
+    }
+}
 
 pub trait TensorFns {
     fn is_empty(&self) -> Tensor<i32>;
@@ -135,6 +144,23 @@ impl<
         }
     }
 
+    /// Returns the intersection (common elements) of two rank-1 `Tensor`s.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use rust_tx::*;
+    /// # use std::io;
+    /// #
+    /// # fn main() -> TensorResult<i32> {
+    /// let a = build_scalar(3).iota();                        // 1 2 3
+    /// let b = build_scalar(3).iota().plus(build_scalar(2))?; // 3 4 5
+    /// # // let c = build_scalar(3).iota().plus(3); // 4 5 6
+    ///
+    /// assert_eq!(a.intersection(b)?, build_vector(vec![3]));
+    /// # Ok(build_scalar(1))
+    /// # }
+    /// ```
     fn intersection(self, other: Tensor<Self::Item>) -> TensorResult<Self::Item> {
         if self.rank() > 1 {
             return Err(TensorError::Rank);
@@ -589,7 +615,8 @@ pub fn print_tensor(tr: TensorResult<i32>) {
     }
 }
 
-pub fn count_negatives(nums: Tensor<i32>) -> TensorResult<i32> {
+#[cfg(test)]
+fn count_negatives(nums: Tensor<i32>) -> TensorResult<i32> {
     let n = build_scalar(0);
     nums.less_than(n)?.sum(None)
 }
@@ -598,47 +625,51 @@ pub fn count_negatives(nums: Tensor<i32>) -> TensorResult<i32> {
 //     nums.lt(0).sum()
 // }
 
-pub fn max_wealth(accounts: Tensor<i32>) -> TensorResult<i32> {
+#[cfg(test)]
+fn max_wealth(accounts: Tensor<i32>) -> TensorResult<i32> {
     accounts.sum(Some(2))?.maximum(None)
 }
 
-// // pub fn max_wealth(accounts: Tensor) {
-// //     accounts.sum(1).maximum()
-// // }
+// pub fn max_wealth(accounts: Tensor) {
+//     accounts.sum(1).maximum()
+// }
 
-pub fn array_sign(arr: Tensor<i32>) -> TensorResult<i32> {
+#[cfg(test)]
+fn array_sign(arr: Tensor<i32>) -> TensorResult<i32> {
     arr.sign()?.product(None)
 }
 
-// // pub fn array_sign(arr: Tensor<i32>) {
-// //     arr.sign().product()
-// // }
+// pub fn array_sign(arr: Tensor<i32>) {
+//     arr.sign().product()
+// }
 
-pub fn mco(vec: Tensor<i32>) -> TensorResult<i32> {
+#[cfg(test)]
+fn mco(vec: Tensor<i32>) -> TensorResult<i32> {
     let op = |a, b| b * (a + b);
     vec.scan(&op, None)?.maximum(None)
 }
 
-// // pub fn mco(Tensor vector) {
-// //     vector.scan(phi1(left, mul, plus))
-// //           .maximum()
-// // }
+// pub fn mco(Tensor vector) {
+//     vector.scan(phi1(left, mul, plus))
+//           .maximum()
+// }
 
-// // pub fn check_matrix(Tensor grid) {
-// //     grid.eye()
-// //         .s(rev, id)
-// //         .equal(grid.min(1))
-// // }
+// pub fn check_matrix(Tensor grid) {
+//     grid.eye()
+//         .s(rev, id)
+//         .equal(grid.min(1))
+// }
 
-// // pub fn max_paren_depth(str equation) {
-// //     equation.to_tensor()
-// //             .outer("()")
-// //             .reduce(num::minus, 1)
-// //             .scan(num::plus)
-// //             .maximum()
-// // }
+// pub fn max_paren_depth(str equation) {
+//     equation.to_tensor()
+//             .outer("()")
+//             .reduce(num::minus, 1)
+//             .scan(num::plus)
+//             .maximum()
+// }
 
-pub fn stringless_max_paren_depth(equation: Tensor<i32>) -> TensorResult<i32> {
+#[cfg(test)]
+fn stringless_max_paren_depth(equation: Tensor<i32>) -> TensorResult<i32> {
     let rhs = build_vector(vec![2, 3]);
     equation
         .outer_product(rhs, &|a, b| (a == b).into())?
@@ -647,13 +678,15 @@ pub fn stringless_max_paren_depth(equation: Tensor<i32>) -> TensorResult<i32> {
         .maximum(None)
 }
 
-pub fn smaller_numbers_than_current(nums: Tensor<i32>) -> TensorResult<i32> {
+#[cfg(test)]
+fn smaller_numbers_than_current(nums: Tensor<i32>) -> TensorResult<i32> {
     nums.clone()
         .outer_product(nums, &|a, b| (a > b).into())?
         .sum(Some(2))
 }
 
-pub fn find_pairs(nums: Tensor<i32>, k: i32) -> TensorResult<i32> {
+#[cfg(test)]
+fn find_pairs(nums: Tensor<i32>, k: i32) -> TensorResult<i32> {
     let uniq = nums.unique()?;
     uniq.clone()
         .outer_product(uniq, &Sub::sub)?
@@ -661,14 +694,16 @@ pub fn find_pairs(nums: Tensor<i32>, k: i32) -> TensorResult<i32> {
         .sum(None)
 }
 
-pub fn lucky_numbers(matrix: Tensor<i32>) -> TensorResult<i32> {
+#[cfg(test)]
+fn lucky_numbers(matrix: Tensor<i32>) -> TensorResult<i32> {
     matrix
         .clone()
         .minimum(Some(2))?
         .intersection(matrix.maximum(Some(1))?)
 }
 
-pub fn num_special(mat: Tensor<i32>) -> TensorResult<i32> {
+#[cfg(test)]
+fn num_special(mat: Tensor<i32>) -> TensorResult<i32> {
     mat.clone()
         .sum(Some(1))?
         .multiply(mat.sum(Some(2))?)?
@@ -676,11 +711,13 @@ pub fn num_special(mat: Tensor<i32>) -> TensorResult<i32> {
         .sum(None)
 }
 
-pub fn num_identical_pairs(nums: Tensor<i32>) -> TensorResult<i32> {
+#[cfg(test)]
+fn num_identical_pairs(nums: Tensor<i32>) -> TensorResult<i32> {
     nums.triangle_product(&|a, b| (a == b).into())?.sum(None)
 }
 
-pub fn max_ice_cream(costs: Tensor<i32>, coins: Tensor<i32>) -> TensorResult<i32> {
+#[cfg(test)]
+fn max_ice_cream(costs: Tensor<i32>, coins: Tensor<i32>) -> TensorResult<i32> {
     costs
         .sort()?
         .scan(&Add::add, None)?
@@ -688,7 +725,8 @@ pub fn max_ice_cream(costs: Tensor<i32>, coins: Tensor<i32>) -> TensorResult<i32
         .sum(None)
 }
 
-pub fn can_make_arithmetic_progression(arr: Tensor<i32>) -> TensorResult<i32> {
+#[cfg(test)]
+fn can_make_arithmetic_progression(arr: Tensor<i32>) -> TensorResult<i32> {
     arr.sort()?
         .slide(2)?
         .reduce(&Sub::sub, Some(2))?
@@ -697,7 +735,8 @@ pub fn can_make_arithmetic_progression(arr: Tensor<i32>) -> TensorResult<i32> {
         .equal(build_scalar(1))
 }
 
-pub fn first_uniq_num(nums: Tensor<i32>) -> TensorResult<i32> {
+#[cfg(test)]
+fn first_uniq_num(nums: Tensor<i32>) -> TensorResult<i32> {
     Ok(nums
         .clone()
         .outer_product(nums, &|a, b| (a == b).into())?
@@ -707,22 +746,26 @@ pub fn first_uniq_num(nums: Tensor<i32>) -> TensorResult<i32> {
         .first())
 }
 
-pub fn check_if_double_exists(arr: Tensor<i32>) -> TensorResult<i32> {
+#[cfg(test)]
+fn check_if_double_exists(arr: Tensor<i32>) -> TensorResult<i32> {
     arr.triangle_product(&|a, b| (a == 2 * b).into())?.any(None)
 }
 
-pub fn has_alternating_bits(n: Tensor<i32>) -> TensorResult<i32> {
+#[cfg(test)]
+fn has_alternating_bits(n: Tensor<i32>) -> TensorResult<i32> {
     n.base(2)?
         .slide(2)?
         .reduce(&|a, b| (a != b).into(), Some(2))?
         .all(None)
 }
 
-pub fn sum_digits_in_base_k(n: Tensor<i32>, k: i32) -> TensorResult<i32> {
+#[cfg(test)]
+fn sum_digits_in_base_k(n: Tensor<i32>, k: i32) -> TensorResult<i32> {
     n.base(k)?.sum(None)
 }
 
-pub fn count_even_digit_sum(num: Tensor<i32>) -> TensorResult<i32> {
+#[cfg(test)]
+fn count_even_digit_sum(num: Tensor<i32>) -> TensorResult<i32> {
     num.iota()
         .base(10)?
         .sum(Some(2))?
@@ -731,7 +774,8 @@ pub fn count_even_digit_sum(num: Tensor<i32>) -> TensorResult<i32> {
         .sum(None)
 }
 
-pub fn apply_array_operations(nums: Tensor<i32>) -> TensorResult<i32> {
+#[cfg(test)]
+fn apply_array_operations(nums: Tensor<i32>) -> TensorResult<i32> {
     let mask = nums
         .clone()
         .slide(2)?
@@ -747,11 +791,13 @@ pub fn apply_array_operations(nums: Tensor<i32>) -> TensorResult<i32> {
         .partition(&|x| *x != 0)
 }
 
-pub fn check_if_pangram(sentence: Tensor<char>) -> TensorResult<i32> {
+#[cfg(test)]
+fn check_if_pangram(sentence: Tensor<char>) -> TensorResult<i32> {
     sentence.unique()?.len().equal(build_scalar(26))
 }
 
-pub fn max_length_between_equal_characters(s: Tensor<char>) -> TensorResult<i32> {
+#[cfg(test)]
+fn max_length_between_equal_characters(s: Tensor<char>) -> TensorResult<i32> {
     s.clone()
         .outer_product(s, &|a, b| (a == b).into())?
         .indices()?
