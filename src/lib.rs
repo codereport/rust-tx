@@ -365,7 +365,6 @@ impl TensorIntOps for Tensor<i32> {
             2 => {
                 let [rows, cols] = self.shape[..] else { todo!() };
                 let new_data = (1..=rows)
-                    .into_iter()
                     .cartesian_product(1..=cols)
                     .zip(self.data)
                     .filter(|&(_, x)| x == 1)
