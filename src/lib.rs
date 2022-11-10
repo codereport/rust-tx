@@ -348,7 +348,7 @@ impl TensorIntOps for Tensor<i32> {
                     .data
                     .into_iter()
                     .enumerate()
-                    .filter(|(_, x)| *x == 1)
+                    .filter(|&(_, x)| x == 1)
                     .map(|(i, _)| i as i32 + 1)
                     .collect::<Vec<_>>();
                 Ok(Tensor {
