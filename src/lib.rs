@@ -36,10 +36,24 @@ impl<T> Termination for Tensor<T> {
     }
 }
 
-pub trait TensorFns {
-    fn is_empty(&self) -> Tensor<i32>;
-    fn len(&self) -> Tensor<i32>;
-    fn rank(&self) -> i32;
+impl<T> Tensor<T> {
+    pub fn is_empty(&self) -> Tensor<i32> {
+        Tensor {
+            shape: vec![],
+            data: vec![self.data.is_empty().into()],
+        }
+    }
+
+    pub fn len(&self) -> Tensor<i32> {
+        Tensor {
+            shape: vec![],
+            data: vec![*self.shape.first().unwrap()],
+        }
+    }
+
+    pub fn rank(&self) -> i32 {
+        self.shape.len() as i32
+    }
 }
 
 pub trait TensorOps {
@@ -104,26 +118,6 @@ pub trait TensorIntOps {
     fn minimum(self, rank: Rank) -> TensorResult<i32>;
     fn product(self, rank: Rank) -> TensorResult<i32>;
     fn sum(self, rank: Rank) -> TensorResult<i32>;
-}
-
-impl<T> TensorFns for Tensor<T> {
-    fn is_empty(&self) -> Tensor<i32> {
-        Tensor {
-            shape: vec![],
-            data: vec![self.data.is_empty().into()],
-        }
-    }
-
-    fn len(&self) -> Tensor<i32> {
-        Tensor {
-            shape: vec![],
-            data: vec![*self.shape.first().unwrap()],
-        }
-    }
-
-    fn rank(&self) -> i32 {
-        self.shape.len() as i32
-    }
 }
 
 impl<
