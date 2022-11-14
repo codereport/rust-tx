@@ -357,7 +357,7 @@ impl TensorIntOps for Tensor<i32> {
                 })
             }
             2 => {
-                let [rows, cols] = self.shape[..] else { todo!() };
+                let [rows, cols] = self.shape[..] else { return Err(TensorError::Shape) };
                 let new_data = (1..=rows)
                     .cartesian_product(1..=cols)
                     .zip(self.data)
