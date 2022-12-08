@@ -54,12 +54,21 @@ impl<T> Tensor<T> {
     pub fn rank(&self) -> i32 {
         self.shape.len() as i32
     }
+
+    pub fn to_vec(self) -> Option<Vec<T>> {
+        if self.rank() != 1 {
+            return None;
+        }
+        Some(self.data)
+    }
 }
 
 pub trait TensorOps {
     type Item;
 
     fn first(self) -> Tensor<Self::Item>;
+    fn flatten(self) -> Tensor<Self::Item>;
+    fn chunk(self, chunk_size: usize) -> TensorResult<Self::Item>;
     fn intersection(self, other: Tensor<Self::Item>) -> TensorResult<Self::Item>;
     fn join(self, other: Tensor<Self::Item>) -> TensorResult<Self::Item>;
     fn partition(self, pred: &dyn Fn(&Self::Item) -> bool) -> TensorResult<Self::Item>;
@@ -254,6 +263,13 @@ impl<
         })
     }
 
+    fn flatten(self) -> Tensor<T> {
+        Tensor {
+            shape: vec![self.shape.iter().product()],
+            data: self.data,
+        }
+    }
+
     fn reshape(self, shape: Vec<i32>) -> Tensor<T> {
         let n: i32 = shape.iter().product();
         Tensor {
@@ -293,6 +309,19 @@ impl<
                     .collect(),
             }),
         }
+    }
+
+    fn chunk(self, chunk_size: usize) -> TensorResult<T> {
+        if self.rank() != 1 {
+            return Err(TensorError::Rank);
+        } else if self.data.len() % chunk_size != 0 {
+            return Err(TensorError::Shape);
+        }
+
+        Ok(Tensor {
+            shape: vec![(self.data.len() / chunk_size) as i32, chunk_size as i32],
+            data: self.data,
+        })
     }
 
     fn slide(self, window_size: usize) -> TensorResult<T> {
@@ -828,6 +857,34 @@ mod tests {
             let input = build_scalar(3).iota();
             let expected = build_vector(vec![3, 2, 1]);
             assert_eq!(input.reverse(None).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_chunk() {
+        {
+            let input = build_scalar(6).iota();
+            let expected = build_matrix(vec![2, 3], vec![1, 2, 3, 4, 5, 6]);
+            assert_eq!(input.chunk(3).unwrap(), expected);
+        }
+        {
+            let input = build_scalar(6).iota();
+            let expected = build_matrix(vec![3, 2], vec![1, 2, 3, 4, 5, 6]);
+            assert_eq!(input.chunk(2).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_flatten() {
+        {
+            let input = build_matrix(vec![2, 3], vec![1, 2, 3, 4, 5, 6]);
+            let expected = build_scalar(6).iota();
+            assert_eq!(input.flatten(), expected);
+        }
+        {
+            let input = build_matrix(vec![3, 2], vec![1, 2, 3, 4, 5, 6]);
+            let expected = build_scalar(6).iota();
+            assert_eq!(input.flatten(), expected);
         }
     }
 
