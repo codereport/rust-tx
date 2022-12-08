@@ -121,7 +121,7 @@ pub trait TensorIntOps {
         F: Fn(i32, i32) -> i32 + Clone;
     fn scan<F>(self, binop: F, rank: Rank) -> TensorResult<i32>
     where
-        F: FnMut(&i32, i32) -> i32;
+        F: FnMut(&i32, i32) -> i32 + Clone;
     fn triangle_product(self, binop: &dyn Fn(i32, i32) -> i32) -> TensorResult<i32>;
 
     // Reduce Specializations
@@ -509,13 +509,24 @@ impl TensorIntOps for Tensor<i32> {
 
     fn scan<F>(self, binop: F, rank: Rank) -> TensorResult<i32>
     where
-        F: FnMut(&i32, i32) -> i32,
+        F: FnMut(&i32, i32) -> i32 + Clone,
     {
         match rank {
             None => Ok(Tensor {
                 shape: self.shape,
                 data: self.data.into_iter().scan_(binop).collect(),
             }),
+            Some(2) => {
+                let chunk_size = self.shape.clone().into_iter().nth(1).unwrap() as usize;
+                Ok(Tensor {
+                    shape: self.shape,
+                    data: self
+                        .data
+                        .chunks(chunk_size)
+                        .flat_map(|chunk| chunk.iter().copied().scan_(binop.clone()))
+                        .collect(),
+                })
+            }
             Some(_) => Err(TensorError::NotImplementedYet),
         }
     }
