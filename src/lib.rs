@@ -2,11 +2,10 @@
 #![feature(int_log)]
 
 use itertools::Itertools;
-// use iterx::Iterx;
+use iterx::Iterx;
 use std::collections::HashSet;
 use std::convert::TryInto;
 use std::iter;
-use std::iter::once;
 #[cfg(test)]
 use std::ops::Sub;
 use std::ops::{Add, Mul};
@@ -111,7 +110,9 @@ pub trait TensorIntOps {
     fn reduce<F>(self, binop: F, rank: Rank) -> TensorResult<i32>
     where
         F: Fn(i32, i32) -> i32 + Clone;
-    fn scan(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32>;
+    fn scan<F>(self, binop: F, rank: Rank) -> TensorResult<i32>
+    where
+        F: FnMut(&i32, i32) -> i32;
     fn triangle_product(self, binop: &dyn Fn(i32, i32) -> i32) -> TensorResult<i32>;
 
     // Reduce Specializations
@@ -477,20 +478,15 @@ impl TensorIntOps for Tensor<i32> {
         }
     }
 
-    fn scan(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32> {
+    fn scan<F>(self, binop: F, rank: Rank) -> TensorResult<i32>
+    where
+        F: FnMut(&i32, i32) -> i32,
+    {
         match rank {
-            None => {
-                let first = self.data.iter().copied().next().unwrap();
-                Ok(Tensor {
-                    shape: self.shape,
-                    data: once(first)
-                        .chain(self.data.into_iter().skip(1).scan(first, |acc, x| {
-                            *acc = binop(*acc, x);
-                            Some(*acc)
-                        }))
-                        .collect(),
-                })
-            }
+            None => Ok(Tensor {
+                shape: self.shape,
+                data: self.data.into_iter().scan_(binop).collect(),
+            }),
             Some(_) => Err(TensorError::NotImplementedYet),
         }
     }
@@ -644,8 +640,7 @@ fn array_sign(arr: Tensor<i32>) -> TensorResult<i32> {
 
 #[cfg(test)]
 fn mco(vec: Tensor<i32>) -> TensorResult<i32> {
-    let op = |a, b| b * (a + b);
-    vec.scan(&op, None)?.maximum(None)
+    vec.scan(|a, b| b * (a + b), None)?.maximum(None)
 }
 
 // pub fn mco(Tensor vector) {
@@ -673,7 +668,7 @@ fn stringless_max_paren_depth(equation: Tensor<i32>) -> TensorResult<i32> {
     equation
         .outer_product(rhs, &|a, b| (a == b).into())?
         .reduce(&Sub::sub, Some(2))?
-        .scan(&Add::add, None)?
+        .scan(|x, y| x + y, None)?
         .maximum(None)
 }
 
@@ -719,7 +714,7 @@ fn num_identical_pairs(nums: Tensor<i32>) -> TensorResult<i32> {
 fn max_ice_cream(costs: Tensor<i32>, coins: Tensor<i32>) -> TensorResult<i32> {
     costs
         .sort()?
-        .scan(&Add::add, None)?
+        .scan(|x, y| x + y, None)?
         .less_than_or_equal(coins)?
         .sum(None)
 }
