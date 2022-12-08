@@ -24,7 +24,7 @@ pub type Rank = Option<i32>;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Tensor<T> {
-    shape: Vec<i32>,
+    pub shape: Vec<i32>,
     data: Vec<T>,
 }
 
@@ -69,10 +69,12 @@ pub trait TensorOps {
     fn first(self, rank: Rank) -> TensorResult<Self::Item>;
     fn flatten(self) -> Tensor<Self::Item>;
     fn chunk(self, chunk_size: usize) -> TensorResult<Self::Item>;
+    fn drop_last(self, rank: Rank) -> TensorResult<Self::Item>;
     fn intersection(self, other: Tensor<Self::Item>) -> TensorResult<Self::Item>;
     fn join(self, other: Tensor<Self::Item>) -> TensorResult<Self::Item>;
     fn last(self, rank: Rank) -> TensorResult<Self::Item>;
     fn partition(self, pred: &dyn Fn(&Self::Item) -> bool) -> TensorResult<Self::Item>;
+    fn replicate(self, shape: Vec<i32>) -> TensorResult<Self::Item>;
     fn reshape(self, shape: Vec<i32>) -> Tensor<Self::Item>;
     fn reverse(self, rank: Rank) -> TensorResult<Self::Item>;
     fn rotate(self, other: Tensor<i32>, rank: Rank) -> TensorResult<Self::Item>;
@@ -107,7 +109,7 @@ pub trait TensorIntOps {
     fn not(self) -> TensorResult<i32>;
     fn sign(self) -> TensorResult<i32>;
 
-    // Binaray Functions
+    // Binary Functions
     fn base(self, base: i32) -> TensorResult<i32>;
 
     // Binary Scalar Functions
@@ -143,7 +145,8 @@ impl<
             + std::cmp::Eq
             + std::clone::Clone
             + std::marker::Copy
-            + std::cmp::Ord,
+            + std::cmp::Ord
+            + std::fmt::Debug,
     > TensorOps for Tensor<T>
 {
     type Item = T;
@@ -174,6 +177,16 @@ impl<
                         .collect(),
                 })
             }
+            _ => Err(TensorError::NotImplementedYet),
+        }
+    }
+
+    fn drop_last(self, rank: Rank) -> TensorResult<T> {
+        match (self.rank(), rank) {
+            (1, None) => Ok(Tensor {
+                shape: vec![*self.shape.first().unwrap() - 1],
+                data: self.data.into_iter().drop_last().collect(),
+            }),
             _ => Err(TensorError::NotImplementedYet),
         }
     }
@@ -268,6 +281,21 @@ impl<
                     .collect(),
             });
         }
+        if self.rank() == 2 && other.rank() == 1 {
+            if *self.shape.first().unwrap() == *other.shape.first().unwrap() {
+                let x = *self.shape.first().unwrap() as usize;
+                let n = *self.shape.last().unwrap();
+                return Ok(Tensor {
+                    shape: self.shape,
+                    data: self
+                        .data
+                        .into_iter()
+                        .zip(other.replicate(vec![n; x])?.to_vec().unwrap())
+                        .map(|(a, b)| binop(a, b))
+                        .collect(),
+                });
+            }
+        }
         Err(TensorError::Shape)
     }
 
@@ -327,11 +355,29 @@ impl<
         }
     }
 
+    fn replicate(self, amounts: Vec<i32>) -> TensorResult<T> {
+        if self.rank() != 1 {
+            return Err(TensorError::NotImplementedYet);
+        }
+        if build_vector(amounts.clone()).len() != self.len() {
+            return Err(TensorError::Shape);
+        }
+        Ok(Tensor {
+            shape: vec![amounts.iter().sum()],
+            data: self
+                .data
+                .into_iter()
+                .zip(amounts)
+                .flat_map(|(value, amount)| std::iter::repeat(value).take(amount as usize))
+                .collect(),
+        })
+    }
+
     fn reshape(self, shape: Vec<i32>) -> Tensor<T> {
         let n: i32 = shape.iter().product();
         Tensor {
             shape,
-            data: self.data.into_iter().take(n as usize).collect(),
+            data: self.data.into_iter().cycle().take(n as usize).collect(),
         }
     }
 
@@ -951,6 +997,34 @@ mod tests {
             let input = build_scalar(6).iota();
             let expected = build_matrix(vec![3, 2], vec![1, 2, 3, 4, 5, 6]);
             assert_eq!(input.chunk(2).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_reshape() {
+        {
+            let input = build_scalar(3).iota();
+            let expected = build_matrix(vec![2, 3], vec![1, 2, 3, 1, 2, 3]);
+            assert_eq!(input.reshape(vec![2, 3]), expected);
+        }
+    }
+
+    #[test]
+    fn test_replicate() {
+        {
+            let input = build_scalar(4).iota();
+            let expected = build_vector(vec![1, 2, 2, 3, 3, 3]);
+            assert_eq!(input.replicate(vec![1, 2, 3, 0]).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_plus() {
+        {
+            let a = build_matrix(vec![2, 3], vec![1, 2, 3, 4, 5, 6]);
+            let b = build_vector(vec![1, 10]);
+            let expected = build_matrix(vec![2, 3], vec![2, 3, 4, 14, 15, 16]);
+            assert_eq!(a.plus(b).unwrap(), expected);
         }
     }
 
