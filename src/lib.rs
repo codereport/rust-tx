@@ -2,6 +2,7 @@
 #![feature(int_log)]
 
 use itertools::Itertools;
+// use iterx::Iterx;
 use std::collections::HashSet;
 use std::convert::TryInto;
 use std::iter;
@@ -107,7 +108,9 @@ pub trait TensorIntOps {
     fn remainder(self, other: Tensor<i32>) -> TensorResult<i32>;
 
     // HOFs
-    fn reduce(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32>;
+    fn reduce<F>(self, binop: F, rank: Rank) -> TensorResult<i32>
+    where
+        F: Fn(i32, i32) -> i32 + Clone;
     fn scan(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32>;
     fn triangle_product(self, binop: &dyn Fn(i32, i32) -> i32) -> TensorResult<i32>;
 
@@ -427,7 +430,10 @@ impl TensorIntOps for Tensor<i32> {
         })
     }
 
-    fn reduce(self, binop: &dyn Fn(i32, i32) -> i32, rank: Rank) -> TensorResult<i32> {
+    fn reduce<F>(self, binop: F, rank: Rank) -> TensorResult<i32>
+    where
+        F: Fn(i32, i32) -> i32 + Clone,
+    {
         match rank {
             None => Ok(Tensor {
                 shape: vec![],
@@ -443,7 +449,14 @@ impl TensorIntOps for Tensor<i32> {
                         .data
                         .chunks(chunk_size)
                         .fold(vec![0; chunk_size], |acc, chunk| {
-                            acc.iter().zip(chunk).map(|(a, b)| binop(*a, *b)).collect()
+                            acc.into_iter()
+                                .zip(chunk.iter().copied())
+                                .map(|(a, b)| binop(a, b))
+                                .collect()
+                            // TODO: get zip_map to work here :/
+                            // acc.into_iter()
+                            //     .zip_map(chunk.iter().copied(), binop)
+                            //     .collect()
                         }),
                 })
             }
@@ -456,7 +469,7 @@ impl TensorIntOps for Tensor<i32> {
                     data: self
                         .data
                         .chunks(chunk_size)
-                        .map(|chunk| chunk.iter().copied().reduce(binop).unwrap())
+                        .map(|chunk| chunk.iter().copied().reduce(binop.clone()).unwrap())
                         .collect(),
                 })
             }
