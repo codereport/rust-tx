@@ -127,7 +127,7 @@ pub trait TensorIntOps {
         F: FnMut(&i32, i32) -> i32 + Clone;
     fn prescan<F>(self, init: i32, binop: F, rank: Rank) -> TensorResult<i32>
     where
-        F: FnMut(&i32, &i32) -> i32;
+        F: FnMut(&i32, i32) -> i32;
     fn triangle_product(self, binop: &dyn Fn(i32, i32) -> i32) -> TensorResult<i32>;
 
     // Reduce Specializations
@@ -636,7 +636,7 @@ impl TensorIntOps for Tensor<i32> {
 
     fn prescan<F>(self, init: i32, binop: F, rank: Rank) -> TensorResult<i32>
     where
-        F: FnMut(&i32, &i32) -> i32,
+        F: FnMut(&i32, i32) -> i32,
     {
         match rank {
             None => Ok(Tensor {
