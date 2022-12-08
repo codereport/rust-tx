@@ -66,11 +66,12 @@ impl<T> Tensor<T> {
 pub trait TensorOps {
     type Item;
 
-    fn first(self) -> Tensor<Self::Item>;
+    fn first(self, rank: Rank) -> TensorResult<Self::Item>;
     fn flatten(self) -> Tensor<Self::Item>;
     fn chunk(self, chunk_size: usize) -> TensorResult<Self::Item>;
     fn intersection(self, other: Tensor<Self::Item>) -> TensorResult<Self::Item>;
     fn join(self, other: Tensor<Self::Item>) -> TensorResult<Self::Item>;
+    fn last(self, rank: Rank) -> TensorResult<Self::Item>;
     fn partition(self, pred: &dyn Fn(&Self::Item) -> bool) -> TensorResult<Self::Item>;
     fn reshape(self, shape: Vec<i32>) -> Tensor<Self::Item>;
     fn reverse(self, rank: Rank) -> TensorResult<Self::Item>;
@@ -122,6 +123,9 @@ pub trait TensorIntOps {
     fn scan<F>(self, binop: F, rank: Rank) -> TensorResult<i32>
     where
         F: FnMut(&i32, i32) -> i32 + Clone;
+    fn prescan<F>(self, init: i32, binop: F, rank: Rank) -> TensorResult<i32>
+    where
+        F: FnMut(&i32, &i32) -> i32;
     fn triangle_product(self, binop: &dyn Fn(i32, i32) -> i32) -> TensorResult<i32>;
 
     // Reduce Specializations
@@ -144,10 +148,63 @@ impl<
 {
     type Item = T;
 
-    fn first(self) -> Tensor<T> {
-        Tensor {
-            shape: vec![],
-            data: self.data.into_iter().take(1).collect(),
+    fn first(self, rank: Rank) -> TensorResult<T> {
+        if rank.is_none() {
+            return Ok(Tensor {
+                shape: vec![],
+                data: self.data.into_iter().take(1).collect(),
+            });
+        }
+        if rank.unwrap() > self.rank() {
+            return Err(TensorError::Rank);
+        }
+        if self.rank() > 2 {
+            return Err(TensorError::NotImplementedYet);
+        }
+        match rank {
+            Some(2) => {
+                let new_shape = vec![*self.shape.first().unwrap()];
+                let chunk_size = *self.shape.last().unwrap() as usize;
+                Ok(Tensor {
+                    shape: new_shape,
+                    data: self
+                        .data
+                        .chunks(chunk_size)
+                        .flat_map(|chunk| chunk.iter().copied().take(1))
+                        .collect(),
+                })
+            }
+            _ => Err(TensorError::NotImplementedYet),
+        }
+    }
+
+    fn last(self, rank: Rank) -> TensorResult<T> {
+        if rank.is_none() {
+            return Ok(Tensor {
+                shape: vec![],
+                data: vec![*self.data.last().unwrap()],
+            });
+        }
+        if rank.unwrap() > self.rank() {
+            return Err(TensorError::Rank);
+        }
+        if self.rank() > 2 {
+            return Err(TensorError::NotImplementedYet);
+        }
+        match rank {
+            Some(2) => {
+                let new_shape = vec![*self.shape.first().unwrap()];
+                let chunk_size = *self.shape.last().unwrap() as usize;
+                Ok(Tensor {
+                    shape: new_shape,
+                    data: self
+                        .data
+                        .chunks(chunk_size)
+                        .flat_map(|chunk| chunk.iter().copied().skip(chunk_size - 1))
+                        .collect(),
+                })
+            }
+            _ => Err(TensorError::NotImplementedYet),
         }
     }
 
@@ -472,7 +529,7 @@ impl TensorIntOps for Tensor<i32> {
             Some(1) => {
                 // TODO: only works for matrices
                 let new_shape: Vec<i32> = self.shape.clone().into_iter().skip(1).collect();
-                let chunk_size = self.shape.into_iter().nth(1).unwrap() as usize;
+                let chunk_size = *self.shape.last().unwrap() as usize;
                 Ok(Tensor {
                     shape: new_shape,
                     data: self
@@ -493,7 +550,7 @@ impl TensorIntOps for Tensor<i32> {
             Some(2) => {
                 // TODO: only works for matrices
                 let new_shape: Vec<i32> = self.shape.clone().into_iter().take(1).collect();
-                let chunk_size = self.shape.into_iter().nth(1).unwrap() as usize;
+                let chunk_size = *self.shape.last().unwrap() as usize;
                 Ok(Tensor {
                     shape: new_shape,
                     data: self
@@ -517,7 +574,7 @@ impl TensorIntOps for Tensor<i32> {
                 data: self.data.into_iter().scan_(binop).collect(),
             }),
             Some(2) => {
-                let chunk_size = self.shape.clone().into_iter().nth(1).unwrap() as usize;
+                let chunk_size = *self.shape.last().unwrap() as usize;
                 Ok(Tensor {
                     shape: self.shape,
                     data: self
@@ -527,6 +584,19 @@ impl TensorIntOps for Tensor<i32> {
                         .collect(),
                 })
             }
+            Some(_) => Err(TensorError::NotImplementedYet),
+        }
+    }
+
+    fn prescan<F>(self, init: i32, binop: F, rank: Rank) -> TensorResult<i32>
+    where
+        F: FnMut(&i32, &i32) -> i32,
+    {
+        match rank {
+            None => Ok(Tensor {
+                shape: vec![*self.shape.first().unwrap() + 1],
+                data: self.data.into_iter().prescan(init, binop).collect(),
+            }),
             Some(_) => Err(TensorError::NotImplementedYet),
         }
     }
@@ -771,13 +841,12 @@ fn can_make_arithmetic_progression(arr: Tensor<i32>) -> TensorResult<i32> {
 
 #[cfg(test)]
 fn first_uniq_num(nums: Tensor<i32>) -> TensorResult<i32> {
-    Ok(nums
-        .clone()
+    nums.clone()
         .outer_product(nums, &|a, b| (a == b).into())?
         .sum(Some(2))?
         .equal(build_scalar(1))?
         .indices()?
-        .first())
+        .first(None)
 }
 
 #[cfg(test)]
@@ -849,7 +918,7 @@ mod tests {
         {
             let input = build_vector(vec![1, 2, 3]);
             let expected = build_scalar(1);
-            assert_eq!(input.first(), expected);
+            assert_eq!(input.first(None).unwrap(), expected);
         }
     }
 
