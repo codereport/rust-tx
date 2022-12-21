@@ -6,7 +6,6 @@ use iterx::Iterx;
 use std::collections::HashSet;
 use std::convert::TryInto;
 use std::iter;
-use std::iter::once;
 #[cfg(test)]
 use std::ops::Sub;
 use std::ops::{Add, Mul};
@@ -164,12 +163,7 @@ impl<
                     data: other
                         .data
                         .chunks(cols as usize)
-                        .flat_map(|chunk| {
-                            // add prepend (and analog append) to iterx
-                            once(*value)
-                                .chain(chunk.iter().copied())
-                                .collect::<Vec<_>>()
-                        })
+                        .flat_map(|chunk| chunk.iter().copied().prepend(*value))
                         .collect(),
                 });
             }
@@ -186,8 +180,7 @@ impl<
                         .data
                         .chunks(cols as usize)
                         .zip_map(self.data, |chunk, value| {
-                            // add prepend (and analog append) to iterx
-                            once(value).chain(chunk.iter().copied()).collect::<Vec<_>>()
+                            chunk.iter().copied().prepend(value)
                         })
                         .flatten()
                         .collect(),

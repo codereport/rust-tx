@@ -9,4 +9,5 @@ license = "MIT"
 [dependencies]
 num = "0.4"
 itertools = "0.10.5"
-iterx = "0.0.8"
+iterx = "0.0.9"
+# iterx = { path = "../rust-iterx" }
