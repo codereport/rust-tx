@@ -71,6 +71,7 @@ pub trait TensorOps {
     fn first(self, rank: Rank) -> TensorResult<Self::Item>;
     fn flatten(self) -> Tensor<Self::Item>;
     fn chunk(self, chunk_size: usize) -> TensorResult<Self::Item>;
+    fn drop_first(self, rank: Rank) -> TensorResult<Self::Item>;
     fn drop_last(self, rank: Rank) -> TensorResult<Self::Item>;
     fn intersection(self, other: Tensor<Self::Item>) -> TensorResult<Self::Item>;
     fn join(self, other: Tensor<Self::Item>) -> TensorResult<Self::Item>;
@@ -220,6 +221,27 @@ impl<
                         .data
                         .chunks(chunk_size)
                         .flat_map(|chunk| chunk.iter().copied().take(1))
+                        .collect(),
+                })
+            }
+            _ => Err(TensorError::NotImplementedYet),
+        }
+    }
+
+    fn drop_first(self, rank: Rank) -> TensorResult<T> {
+        match (self.rank(), rank) {
+            (1, None) => Ok(Tensor {
+                shape: vec![*self.shape.first().unwrap() - 1],
+                data: self.data.into_iter().skip(1).collect(),
+            }),
+            (2, Some(2)) => {
+                let [rows, cols] = self.shape[..] else { return Err(TensorError::Shape) };
+                Ok(Tensor {
+                    shape: vec![rows, cols - 1],
+                    data: self
+                        .data
+                        .chunks(cols as usize)
+                        .flat_map(|chunk| chunk.iter().copied().skip(1))
                         .collect(),
                 })
             }
