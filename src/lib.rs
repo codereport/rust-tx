@@ -6,6 +6,7 @@ use iterx::Iterx;
 use std::collections::HashSet;
 use std::convert::TryInto;
 use std::iter;
+use std::iter::once;
 #[cfg(test)]
 use std::ops::Sub;
 use std::ops::{Add, Mul};
@@ -66,6 +67,7 @@ impl<T> Tensor<T> {
 pub trait TensorOps {
     type Item;
 
+    fn append(self, other: Tensor<Self::Item>) -> TensorResult<Self::Item>;
     fn first(self, rank: Rank) -> TensorResult<Self::Item>;
     fn flatten(self) -> Tensor<Self::Item>;
     fn chunk(self, chunk_size: usize) -> TensorResult<Self::Item>;
@@ -150,6 +152,29 @@ impl<
     > TensorOps for Tensor<T>
 {
     type Item = T;
+
+    fn append(self, other: Tensor<Self::Item>) -> TensorResult<Self::Item> {
+        if self.rank() == 0 {
+            if other.rank() == 2 {
+                let value = self.data.first().unwrap();
+                let [rows, cols] = other.shape[..] else { return Err(TensorError::Shape) };
+                return Ok(Tensor {
+                    shape: vec![rows, cols + 1],
+                    data: other
+                        .data
+                        .chunks(cols as usize)
+                        .flat_map(|chunk| {
+                            once(*value)
+                                .chain(chunk.iter().copied())
+                                .collect::<Vec<_>>()
+                        })
+                        .collect(),
+                });
+            }
+            return Err(TensorError::NotImplementedYet);
+        }
+        Err(TensorError::NotImplementedYet)
+    }
 
     fn first(self, rank: Rank) -> TensorResult<T> {
         if rank.is_none() {
@@ -958,6 +983,24 @@ fn max_length_between_equal_characters(s: Tensor<char>) -> TensorResult<i32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_append() {
+        // {
+        //     // not supported yet
+        //     let first = build_scalar(0);
+        //     let rest = build_vector(vec![1, 2, 3]);
+        //     let expected = build_vector(vec![0, 1, 2, 3]);
+        //     assert_eq!(first.append(rest).unwrap(), expected);
+        // }
+
+        {
+            let first = build_scalar(0);
+            let rest = build_matrix(vec![2, 3], vec![1, 2, 3, 4, 5, 6]);
+            let expected = build_matrix(vec![2, 4], vec![0, 1, 2, 3, 0, 4, 5, 6]);
+            assert_eq!(first.append(rest).unwrap(), expected);
+        }
+    }
 
     #[test]
     fn test_first() {
