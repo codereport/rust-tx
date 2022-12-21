@@ -164,10 +164,31 @@ impl<
                         .data
                         .chunks(cols as usize)
                         .flat_map(|chunk| {
+                            // add prepend (and analog append) to iterx
                             once(*value)
                                 .chain(chunk.iter().copied())
                                 .collect::<Vec<_>>()
                         })
+                        .collect(),
+                });
+            }
+            return Err(TensorError::NotImplementedYet);
+        } else if self.rank() == 1 {
+            if other.rank() == 2 {
+                let [rows, cols] = other.shape[..] else { return Err(TensorError::Shape) };
+                if rows != *self.shape.first().unwrap() {
+                    return Err(TensorError::Shape);
+                }
+                return Ok(Tensor {
+                    shape: vec![rows, cols + 1],
+                    data: other
+                        .data
+                        .chunks(cols as usize)
+                        .zip_map(self.data, |chunk, value| {
+                            // add prepend (and analog append) to iterx
+                            once(value).chain(chunk.iter().copied()).collect::<Vec<_>>()
+                        })
+                        .flatten()
                         .collect(),
                 });
             }
@@ -996,6 +1017,13 @@ mod tests {
 
         {
             let first = build_scalar(0);
+            let rest = build_matrix(vec![2, 3], vec![1, 2, 3, 4, 5, 6]);
+            let expected = build_matrix(vec![2, 4], vec![0, 1, 2, 3, 0, 4, 5, 6]);
+            assert_eq!(first.append(rest).unwrap(), expected);
+        }
+
+        {
+            let first = build_vector(vec![0, 0]);
             let rest = build_matrix(vec![2, 3], vec![1, 2, 3, 4, 5, 6]);
             let expected = build_matrix(vec![2, 4], vec![0, 1, 2, 3, 0, 4, 5, 6]);
             assert_eq!(first.append(rest).unwrap(), expected);
