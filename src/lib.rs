@@ -69,6 +69,7 @@ pub trait TensorOps {
     fn append(self, other: Tensor<Self::Item>) -> TensorResult<Self::Item>;
     fn first(self, rank: Rank) -> TensorResult<Self::Item>;
     fn flatten(self) -> Tensor<Self::Item>;
+    fn flatten_ok(self) -> TensorResult<Self::Item>;
     fn chunk(self, chunk_size: usize) -> TensorResult<Self::Item>;
     fn drop_first(self, rank: Rank) -> TensorResult<Self::Item>;
     fn drop_last(self, rank: Rank) -> TensorResult<Self::Item>;
@@ -425,6 +426,10 @@ impl<
             shape: vec![self.shape.iter().product()],
             data: self.data,
         }
+    }
+
+    fn flatten_ok(self) -> TensorResult<T> {
+        Ok(self.flatten())
     }
 
     fn replicate(self, amounts: Vec<i32>) -> TensorResult<T> {
