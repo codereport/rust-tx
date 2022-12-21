@@ -233,6 +233,17 @@ impl<
                 shape: vec![*self.shape.first().unwrap() - 1],
                 data: self.data.into_iter().drop_last().collect(),
             }),
+            (2, Some(2)) => {
+                let [rows, cols] = self.shape[..] else { return Err(TensorError::Shape) };
+                Ok(Tensor {
+                    shape: vec![rows, cols - 1],
+                    data: self
+                        .data
+                        .chunks(cols as usize)
+                        .flat_map(|chunk| chunk.iter().copied().drop_last())
+                        .collect(),
+                })
+            }
             _ => Err(TensorError::NotImplementedYet),
         }
     }
