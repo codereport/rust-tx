@@ -875,6 +875,15 @@ fn mco(vec: Tensor<i32>) -> TensorResult<i32> {
     vec.scan(|a, b| b * (a + b), None)?.maximum(None)
 }
 
+#[cfg(test)]
+fn lcis(vec: Tensor<i32>) -> TensorResult<i32> {
+    vec.slide(2)?
+        .reduce(|x, y| (x < y).into(), Some(2))?
+        .scan(|a, b| b * (a + b), None)?
+        .maximum(None)?
+        .plus(build_scalar(1))
+}
+
 // pub fn mco(Tensor vector) {
 //     vector.scan(phi1(left, mul, plus))
 //           .maximum()
@@ -1257,6 +1266,21 @@ mod tests {
             let input = build_vector(vec![1, 0, 1, 1, 0, 1]);
             let expected = build_scalar(2);
             assert_eq!(mco(input).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_lcis() {
+        // https://leetcode.com/problems/longest-continuous-increasing-subsequence/
+        {
+            let input = build_vector(vec![1, 3, 5, 4, 7]);
+            let expected = build_scalar(3);
+            assert_eq!(lcis(input).unwrap(), expected);
+        }
+        {
+            let input = build_vector(vec![2, 2, 2, 2, 2]);
+            let expected = build_scalar(1);
+            assert_eq!(lcis(input).unwrap(), expected);
         }
     }
 
